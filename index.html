@@ -282,8 +282,21 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/esptool-js/bundle.js"></script>
+    <script src="https://unpkg.com/esptool-js/bundle.js" 
+            integrity="sha384-OLBgpxUayZM2TNfMsrG17EcZ4bxyTXr71F3vEHIr08f++vC81jzxU4ghTOiYu5sw" 
+            crossorigin="anonymous"></script>
     <script>
+        // Constants
+        const DISCONNECT_WAIT_MS = 1500;
+        
+        // Valid firmware paths (allowlist for security)
+        const VALID_FIRMWARE_PATHS = [
+            'Amoled-T-Display/Factory/Firmware/bootloader.bin',
+            'Amoled-T-Display/Factory/Firmware/partitions.bin',
+            'Amoled-T-Display/Factory/Firmware/boot_app0.bin',
+            'Amoled-T-Display/Factory/Firmware/firmware.bin'
+        ];
+
         let esploader;
         let device;
         let transport;
@@ -347,6 +360,11 @@
             } else {
                 // Connect
                 try {
+                    // Check if esptool-js is loaded
+                    if (typeof Transport === 'undefined' || typeof ESPLoader === 'undefined') {
+                        throw new Error('esptool-js library failed to load. Please refresh the page.');
+                    }
+
                     logToConsole('Requesting USB device access...', 'info');
                     device = await navigator.serial.requestPort({});
                     transport = new Transport(device);
@@ -400,6 +418,12 @@
                 const fileArray = [];
                 for (let i = 0; i < config.files.length; i++) {
                     const file = config.files[i];
+                    
+                    // Validate file path against allowlist
+                    if (!VALID_FIRMWARE_PATHS.includes(file.path)) {
+                        throw new Error(`Invalid firmware path: ${file.path}`);
+                    }
+                    
                     logToConsole(`Loading ${file.path}...`, 'info');
                     
                     try {
@@ -457,7 +481,7 @@
         async function disconnect() {
             if (transport) {
                 await transport.disconnect();
-                await transport.waitForUnlock(1500);
+                await transport.waitForUnlock(DISCONNECT_WAIT_MS);
             }
             connected = false;
             connectBtn.textContent = 'Connect to ESP32-S3';
@@ -468,14 +492,20 @@
             device = null;
         }
 
-        // Check for Web Serial API support
-        if (!navigator.serial) {
-            showStatus('Web Serial API is not supported in this browser. Please use Chrome, Edge, or Opera.', 'error');
-            connectBtn.disabled = true;
-            logToConsole('Web Serial API not supported', 'error');
-        } else {
-            logToConsole('Web Serial API supported - Ready to connect!', 'success');
-        }
+        // Check for Web Serial API support and esptool-js library
+        window.addEventListener('load', () => {
+            if (!navigator.serial) {
+                showStatus('Web Serial API is not supported in this browser. Please use Chrome, Edge, or Opera.', 'error');
+                connectBtn.disabled = true;
+                logToConsole('Web Serial API not supported', 'error');
+            } else if (typeof Transport === 'undefined' || typeof ESPLoader === 'undefined') {
+                showStatus('esptool-js library failed to load. Please check your internet connection and refresh the page.', 'error');
+                connectBtn.disabled = true;
+                logToConsole('esptool-js library not loaded', 'error');
+            } else {
+                logToConsole('Web Serial API supported - Ready to connect!', 'success');
+            }
+        });
 
         // Update firmware info when selection changes
         firmwareSelect.addEventListener('change', (e) => {
