@@ -252,6 +252,7 @@
             <label for="firmwareSelect">Choose firmware to flash:</label>
             <select id="firmwareSelect">
                 <option value="amoled-t-display">Amoled T-Display - Factory Firmware</option>
+                <option value="amoled-screencast">Amoled T-Display - Screencast</option>
             </select>
             <div class="firmware-info">
                 <strong>Selected:</strong> Amoled T-Display Factory Firmware<br>
@@ -282,8 +283,14 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/esptool-js@0.5.7/bundle.js"></script>
-    <script>
+    <script type="module">
+        import { Transport } from 'https://unpkg.com/esptool-js@0.4.1/bundle.js';
+        import { ESPLoader } from 'https://unpkg.com/esptool-js@0.4.1/bundle.js';
+
+        // Make them available globally for easier debugging
+        window.Transport = Transport;
+        window.ESPLoader = ESPLoader;
+
         // Constants
         const DISCONNECT_WAIT_MS = 1500;
         
@@ -292,7 +299,11 @@
             'Amoled-T-Display/Factory/Firmware/bootloader.bin',
             'Amoled-T-Display/Factory/Firmware/partitions.bin',
             'Amoled-T-Display/Factory/Firmware/boot_app0.bin',
-            'Amoled-T-Display/Factory/Firmware/firmware.bin'
+            'Amoled-T-Display/Factory/Firmware/firmware.bin',
+            'Amoled-T-Display/Screencast/Firmware/bootloader.bin',
+            'Amoled-T-Display/Screencast/Firmware/partitions.bin',
+            'Amoled-T-Display/Screencast/Firmware/boot_app0.bin',
+            'Amoled-T-Display/Screencast/Firmware/firmware.bin'
         ];
 
         let esploader;
@@ -314,10 +325,19 @@
             'amoled-t-display': {
                 name: 'Amoled T-Display Factory Firmware',
                 files: [
-                    { path: 'Amoled-T-Display/Factory/Firmware/bootloader.bin', offset: 0x0000 },
+                    //{ path: 'Amoled-T-Display/Factory/Firmware/bootloader.bin', offset: 0x0000},
                     { path: 'Amoled-T-Display/Factory/Firmware/partitions.bin', offset: 0x8000 },
                     { path: 'Amoled-T-Display/Factory/Firmware/boot_app0.bin', offset: 0xe000 },
                     { path: 'Amoled-T-Display/Factory/Firmware/firmware.bin', offset: 0x10000 }
+                ]
+            },
+            'amoled-screencast': {
+                name: 'Amoled T-Display Screencast',
+                files: [
+                    { path: 'Amoled-T-Display/Screencast/Firmware/bootloader.bin', offset: 0x0000 },
+                    { path: 'Amoled-T-Display/Screencast/Firmware/partitions.bin', offset: 0x8000 },
+                    { path: 'Amoled-T-Display/Screencast/Firmware/boot_app0.bin', offset: 0xe000 },
+                    { path: 'Amoled-T-Display/Screencast/Firmware/firmware.bin', offset: 0x10000 }
                 ]
             }
         };
@@ -365,18 +385,28 @@
 
                     logToConsole('Requesting USB device access...', 'info');
                     device = await navigator.serial.requestPort({});
-                    transport = new Transport(device);
+                    
+                    logToConsole('Creating transport...', 'info');
+                    transport = new Transport(device, true);
                     
                     logToConsole('Connecting to ESP32-S3...', 'info');
-                    esploader = new ESPLoader(transport, 115200, logToConsole);
+                    esploader = new ESPLoader({
+                        transport: transport,
+                        baudrate: 115200,
+                        terminal: {
+                            clean: () => {},
+                            writeLine: (data) => logToConsole(data),
+                            write: (data) => logToConsole(data)
+                        }
+                    });
                     
-                    await esploader.initialize();
+                    await esploader.main();
                     logToConsole('Connected successfully!', 'success');
                     
-                    const chipName = await esploader.chipName();
+                    const chipName = await esploader.chip.CHIP_NAME;
                     logToConsole('Chip: ' + chipName, 'success');
                     
-                    const macAddr = await esploader.macAddr();
+                    const macAddr = await esploader.chip.MAC_EFUSE_REG;
                     logToConsole('MAC Address: ' + macAddr, 'info');
                     
                     connected = true;
@@ -431,7 +461,7 @@
                         }
                         const data = await response.arrayBuffer();
                         fileArray.push({
-                            data: new Uint8Array(data),
+                            data: new TextDecoder().decode(data),
                             address: file.offset
                         });
                         
@@ -446,10 +476,12 @@
                 logToConsole('All files loaded, starting flash...', 'info');
                 updateProgress(30);
 
-                // Flash the files
+                // Flash the files with proper configuration
                 const flashOptions = {
                     fileArray: fileArray,
-                    flashSize: "keep",
+                    flashSize: "16MB",
+                    flashMode: "dio",
+                    flashFreq: "80m",
                     eraseAll: false,
                     compress: true,
                     reportProgress: (fileIndex, written, total) => {
@@ -463,7 +495,13 @@
                 
                 updateProgress(100);
                 logToConsole('Flash completed successfully! ✨', 'success');
-                showStatus('Flash completed successfully! You can now reset your device.', 'success');
+                logToConsole('Performing hard reset...', 'info');
+                
+                // Hard reset the device after flashing (like --after hard_reset)
+                await esploader.hardReset();
+                
+                logToConsole('Device reset complete!', 'success');
+                showStatus('Flash completed successfully! Device has been reset and should boot now.', 'success');
 
             } catch (error) {
                 logToConsole('Flash failed: ' + error.message, 'error');
@@ -477,10 +515,22 @@
         });
 
         async function disconnect() {
-            if (transport) {
-                await transport.disconnect();
-                await transport.waitForUnlock(DISCONNECT_WAIT_MS);
+            if (esploader) {
+                try {
+                    await esploader.hardReset();
+                } catch (error) {
+                    console.log('Reset error:', error.message);
+                }
             }
+            
+            if (device && device.readable) {
+                try {
+                    await device.close();
+                } catch (error) {
+                    console.log('Close error (port may already be closed):', error.message);
+                }
+            }
+            
             connected = false;
             connectBtn.textContent = 'Connect to ESP32-S3';
             connectBtn.classList.remove('connected');
