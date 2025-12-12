@@ -524,19 +524,15 @@
                 const searchString = variable.firmware_name;
                 const maxLen = variable.max_length || 100;
                 
-                // Find the search string in the binary
-                const searchIndex = modifiedBinary.indexOf(searchString);
+                // Find ALL occurrences of the search string in the binary
+                let searchIndex = modifiedBinary.indexOf(searchString);
                 if (searchIndex === -1) {
                     warnings.push(`Upload definition doesn't match firmware file. String '${searchString}' not found in the firmware.bin`);
                     return;
                 }
 
-                // Extract the entire padded region (searchString + padding to max_length)
-                // In the firmware it looks like: const char ssid[100] = "|*S*|"; (followed by \0 to fill 100 bytes)
-                const paddedRegionLength = maxLen;
-                const originalPaddedRegion = modifiedBinary.substring(searchIndex, searchIndex + paddedRegionLength);
-                
                 // Create new replacement string with null terminator and padding
+                const paddedRegionLength = maxLen;
                 let replacement = value;
                 
                 // Add null terminator
@@ -553,16 +549,29 @@
                     warnings.push(`Value for '${variable.readable_name}' was truncated to ${paddedRegionLength} bytes`);
                 }
 
-                // Only mark as modified if we're actually changing something
-                if (replacement !== originalPaddedRegion) {
-                    wasModified = true;
-                    logToConsole(`Replacing '${searchString}' (${paddedRegionLength} bytes) with '${value}'`, 'info');
-                }
+                // Replace ALL occurrences of the padded region
+                let occurrenceCount = 0;
+                while (searchIndex !== -1) {
+                    const originalPaddedRegion = modifiedBinary.substring(searchIndex, searchIndex + paddedRegionLength);
+                    
+                    // Only mark as modified if we're actually changing something
+                    if (replacement !== originalPaddedRegion) {
+                        wasModified = true;
+                        occurrenceCount++;
+                    }
 
-                // Replace the entire padded region in binary
-                modifiedBinary = modifiedBinary.substring(0, searchIndex) + 
-                                 replacement + 
-                                 modifiedBinary.substring(searchIndex + paddedRegionLength);
+                    // Replace this occurrence
+                    modifiedBinary = modifiedBinary.substring(0, searchIndex) + 
+                                     replacement + 
+                                     modifiedBinary.substring(searchIndex + paddedRegionLength);
+                    
+                    // Find next occurrence (search from after the replacement we just made)
+                    searchIndex = modifiedBinary.indexOf(searchString, searchIndex + paddedRegionLength);
+                }
+                
+                if (occurrenceCount > 0) {
+                    logToConsole(`Replaced '${searchString}' at ${occurrenceCount} location${occurrenceCount > 1 ? 's' : ''} (${paddedRegionLength} bytes each) with '${value}'`, 'info');
+                }
             });
 
             // Only recalculate checksum and SHA256 if we actually modified the firmware
