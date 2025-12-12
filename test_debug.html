@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head><title>Debug Variable Replacement</title></head>
+<body>
+<h1>Debug</h1>
+<pre id="output"></pre>
+<script>
+const log = (msg) => {
+    document.getElementById('output').textContent += msg + '\n';
+};
+
+// Simulate loading firmware
+fetch('Amoled-T-Display/Screencast/Firmware/firmware.bin')
+    .then(r => r.arrayBuffer())
+    .then(async data => {
+        // Convert to binary string
+        const bytes = new Uint8Array(data);
+        let binaryString = '';
+        for (let i = 0; i < bytes.length; i++) {
+            binaryString += String.fromCharCode(bytes[i]);
+        }
+        
+        log(`Loaded firmware: ${binaryString.length} bytes`);
+        
+        // Test replacement
+        const searchString = '|*S*|';
+        const value = ' '; // Space character
+        const maxLen = 100;
+        
+        const searchIndex = binaryString.indexOf(searchString);
+        log(`Found '${searchString}' at index: ${searchIndex}`);
+        
+        const originalRegion = binaryString.substring(searchIndex, searchIndex + maxLen);
+        log(`Original region (first 10): ${JSON.stringify(originalRegion.substring(0, 10))}`);
+        
+        // Create replacement
+        let replacement = value + '\0';
+        while (replacement.length < maxLen) {
+            replacement += '\0';
+        }
+        log(`Replacement (first 10): ${JSON.stringify(replacement.substring(0, 10))}`);
+        log(`Lengths: original=${originalRegion.length}, replacement=${replacement.length}`);
+        
+        // Do replacement
+        const modifiedBinary = binaryString.substring(0, searchIndex) + 
+                               replacement + 
+                               binaryString.substring(searchIndex + maxLen);
+        
+        log(`Modified length: ${modifiedBinary.length}`);
+        log(`Original length: ${binaryString.length}`);
+        log(`Lengths match: ${modifiedBinary.length === binaryString.length}`);
+        
+        // Count changes
+        let changes = 0;
+        for (let i = 0; i < binaryString.length; i++) {
+            if (binaryString.charCodeAt(i) !== modifiedBinary.charCodeAt(i)) {
+                if (changes < 10) {
+                    log(`  Change ${i}: 0x${binaryString.charCodeAt(i).toString(16)} -> 0x${modifiedBinary.charCodeAt(i).toString(16)}`);
+                }
+                changes++;
+            }
+        }
+        log(`Total changes: ${changes}`);
+    });
+</script>
+</body>
+</html>

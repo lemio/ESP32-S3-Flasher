@@ -229,6 +229,106 @@
             color: #333;
         }
 
+        .variables-section {
+            margin-top: 15px;
+            padding: 15px;
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            border-radius: 6px;
+        }
+
+        .variables-section h3 {
+            margin: 0 0 15px 0;
+            font-size: 1em;
+            color: #856404;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .variables-section h3 button {
+            padding: 4px 10px;
+            font-size: 0.85em;
+            background: #fff;
+            color: #856404;
+            border: 1px solid #856404;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: normal;
+        }
+
+        .variables-section h3 button:hover {
+            background: #fff8e1;
+        }
+
+        .variable-input-group {
+            margin-bottom: 12px;
+        }
+
+        .variable-input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .variable-input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .variable-input-wrapper input {
+            flex: 1;
+            padding: 8px 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-family: 'Courier New', monospace;
+        }
+
+        .variable-input-wrapper input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .variable-input-wrapper .postfix,
+        .variable-input-wrapper .prefix {
+            color: #666;
+            font-size: 0.9em;
+            font-family: 'Courier New', monospace;
+            white-space: nowrap;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .button-group button {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #f8f9ff;
+        }
+
+        .btn-secondary:disabled {
+            background: #f5f5f5;
+            color: #999;
+            border-color: #ddd;
+            cursor: not-allowed;
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 25px;
@@ -236,6 +336,10 @@
 
             h1 {
                 font-size: 1.5em;
+            }
+
+            .button-group button {
+                min-width: 100%;
             }
         }
     </style>
@@ -259,6 +363,7 @@
                 <strong>Files:</strong> bootloader.bin, partitions.bin, boot_app0.bin, firmware.bin<br>
                 <strong>Chip:</strong> ESP32-S3
             </div>
+            <div id="variablesContainer"></div>
         </div>
 
         <div class="section">
@@ -270,8 +375,14 @@
         </div>
 
         <div class="section">
-            <div class="section-title">3. Flash Firmware</div>
-            <button id="flashBtn" disabled>Flash Device</button>
+            <div class="section-title">3. Flash or Download Firmware</div>
+            <div class="button-group">
+                <button id="downloadBtn" class="btn-secondary" disabled>📥 Download Modified Firmware</button>
+                <button id="flashBtn" disabled>⚡ Flash Device</button>
+            </div>
+            <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                💡 Tip: Download first to verify your configuration before flashing
+            </p>
             <div class="progress-container" id="progressContainer">
                 <div class="progress-bar" id="progressBar">0%</div>
             </div>
@@ -314,11 +425,322 @@
 
         const connectBtn = document.getElementById('connectBtn');
         const flashBtn = document.getElementById('flashBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
         const consoleDiv = document.getElementById('console');
         const statusDiv = document.getElementById('status');
         const progressContainer = document.getElementById('progressContainer');
         const progressBar = document.getElementById('progressBar');
         const firmwareSelect = document.getElementById('firmwareSelect');
+        const variablesContainer = document.getElementById('variablesContainer');
+
+        // Load saved variables from localStorage
+        const loadVariable = (key, defaultValue) => {
+            const saved = localStorage.getItem(`fw_var_${key}`);
+            return saved !== null ? saved : defaultValue;
+        };
+
+        // Save variable to localStorage
+        const saveVariable = (key, value) => {
+            localStorage.setItem(`fw_var_${key}`, value);
+        };
+
+        // Render variable inputs for selected firmware
+        const renderVariables = (config) => {
+            if (!config.variables || config.variables.length === 0) {
+                variablesContainer.innerHTML = '';
+                variablesContainer.style.display = 'none';
+                return;
+            }
+
+            let html = '<div class="variables-section"><h3><span>⚙️ Firmware Configuration</span><button id="resetVarsBtn">Reset to Defaults</button></h3>';
+            
+            config.variables.forEach((variable, index) => {
+                const savedValue = loadVariable(variable.firmware_name, variable.default_value);
+                const inputId = `var_input_${index}`;
+                
+                html += `<div class="variable-input-group">`;
+                html += `<label for="${inputId}">${variable.readable_name}:</label>`;
+                html += `<div class="variable-input-wrapper">`;
+                
+                if (variable.prefix) {
+                    html += `<span class="prefix">${variable.prefix}</span>`;
+                }
+                
+                html += `<input 
+                    type="${variable.type || 'text'}" 
+                    id="${inputId}" 
+                    value="${savedValue}" 
+                    maxlength="${variable.max_length || 100}"
+                    data-firmware-name="${variable.firmware_name}"
+                    data-max-length="${variable.max_length || 100}"
+                />`;
+                
+                if (variable.postfix) {
+                    html += `<span class="postfix">${variable.postfix}</span>`;
+                }
+                
+                html += `</div></div>`;
+            });
+            
+            html += '</div>';
+            variablesContainer.innerHTML = html;
+            variablesContainer.style.display = 'block';
+
+            // Add event listeners to save values
+            config.variables.forEach((variable, index) => {
+                const input = document.getElementById(`var_input_${index}`);
+                input.addEventListener('input', (e) => {
+                    saveVariable(variable.firmware_name, e.target.value);
+                });
+            });
+
+            // Add reset button handler
+            const resetBtn = document.getElementById('resetVarsBtn');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    config.variables.forEach((variable, index) => {
+                        const input = document.getElementById(`var_input_${index}`);
+                        input.value = variable.default_value;
+                        saveVariable(variable.firmware_name, variable.default_value);
+                    });
+                    logToConsole('✓ Variables reset to default values', 'success');
+                    showStatus('Variables reset to defaults', 'success');
+                    setTimeout(() => hideStatus(), 2000);
+                });
+            }
+        };
+
+        // Replace variables in firmware binary string
+        const replaceVariablesInFirmware = async (binaryString, variables) => {
+            let modifiedBinary = binaryString;
+            const warnings = [];
+            let wasModified = false;
+
+            variables.forEach(variable => {
+                const input = document.querySelector(`[data-firmware-name="${variable.firmware_name}"]`);
+                if (!input) return;
+
+                const value = input.value;
+                const searchString = variable.firmware_name;
+                const maxLen = variable.max_length || 100;
+                
+                // Find the search string in the binary
+                const searchIndex = modifiedBinary.indexOf(searchString);
+                if (searchIndex === -1) {
+                    warnings.push(`Upload definition doesn't match firmware file. String '${searchString}' not found in the firmware.bin`);
+                    return;
+                }
+
+                // Extract the entire padded region (searchString + padding to max_length)
+                // In the firmware it looks like: const char ssid[100] = "|*S*|"; (followed by \0 to fill 100 bytes)
+                const paddedRegionLength = maxLen;
+                const originalPaddedRegion = modifiedBinary.substring(searchIndex, searchIndex + paddedRegionLength);
+                
+                // Create new replacement string with null terminator and padding
+                let replacement = value;
+                
+                // Add null terminator
+                replacement += '\0';
+                
+                // Pad with null bytes to max_length
+                while (replacement.length < paddedRegionLength) {
+                    replacement += '\0';
+                }
+                
+                // Truncate if somehow too long (shouldn't happen with proper input validation)
+                if (replacement.length > paddedRegionLength) {
+                    replacement = replacement.substring(0, paddedRegionLength);
+                    warnings.push(`Value for '${variable.readable_name}' was truncated to ${paddedRegionLength} bytes`);
+                }
+
+                // Only mark as modified if we're actually changing something
+                if (replacement !== originalPaddedRegion) {
+                    wasModified = true;
+                    logToConsole(`Replacing '${searchString}' (${paddedRegionLength} bytes) with '${value}'`, 'info');
+                }
+
+                // Replace the entire padded region in binary
+                modifiedBinary = modifiedBinary.substring(0, searchIndex) + 
+                                 replacement + 
+                                 modifiedBinary.substring(searchIndex + paddedRegionLength);
+            });
+
+            // Only recalculate checksum and SHA256 if we actually modified the firmware
+            // This prevents corruption if no changes were made
+            if (wasModified) {
+                logToConsole('Variables were modified, recalculating firmware integrity...', 'info');
+                modifiedBinary = await recalculateImageIntegrity(modifiedBinary);
+            } else {
+                logToConsole('No variables modified, keeping original firmware integrity', 'info');
+            }
+
+            return { modifiedBinary, warnings };
+        };
+
+        // Recalculate checksum and SHA256 digest for ESP32 firmware image
+        const recalculateImageIntegrity = async (binaryString) => {
+            // Check if image has extended header (byte 0 should be 0xE9)
+            if (binaryString.charCodeAt(0) !== 0xE9) {
+                logToConsole('Skipping integrity recalculation: not a valid ESP32 image', 'warning');
+                return binaryString; // Not a valid ESP32 image
+            }
+
+            // Parse ESP32 image header
+            const magic = binaryString.charCodeAt(0);
+            const segmentCount = binaryString.charCodeAt(1);
+            const flashMode = binaryString.charCodeAt(2);
+            const flashSizeFreq = binaryString.charCodeAt(3);
+            const entryPoint = binaryString.charCodeAt(4) | (binaryString.charCodeAt(5) << 8) | 
+                               (binaryString.charCodeAt(6) << 16) | (binaryString.charCodeAt(7) << 24);
+            
+            logToConsole(`ESP32 Image: magic=0xE9, segments=${segmentCount}, entry=0x${entryPoint.toString(16)}`, 'info');
+
+            // Parse extended header (byte 8+)
+            const wpPin = binaryString.charCodeAt(8);
+            const clkDrvSettings = [
+                binaryString.charCodeAt(9), binaryString.charCodeAt(10),
+                binaryString.charCodeAt(11), binaryString.charCodeAt(12)
+            ];
+            const chipId = binaryString.charCodeAt(13) | (binaryString.charCodeAt(14) << 8);
+            const minChipRev = binaryString.charCodeAt(15);
+            const reserved = [binaryString.charCodeAt(16), binaryString.charCodeAt(17)];
+            const appendDigest = binaryString.charCodeAt(18);
+            
+            // Check if SHA256 is actually present
+            // Use append_digest flag and size check (must be >= 33 bytes and multiple of 16)
+            logToConsole(`Extended header: chip_id=${chipId}, append_digest=0x${appendDigest.toString(16).padStart(2, '0')}`, 'info');
+
+            let originalLength = binaryString.length;
+            logToConsole(`Original firmware size: ${originalLength} bytes`, 'info');
+
+            // Detect SHA256 based on:
+            // 1. Size is at least 33 bytes (1 checksum + 32 SHA256)
+            // 2. Size is multiple of 16 (ESP32 requirement)
+            // 3. append_digest flag is not 0x00 (usually 0x01 or 0xFF means present)
+            // NOTE: We can't verify the hash because variables may have been replaced already
+            const hasSHA256 = (originalLength >= 33 && originalLength % 16 === 0 && appendDigest !== 0x00);
+            logToConsole(`SHA256 detection: ${hasSHA256 ? 'present' : 'not present'} (based on append_digest=${appendDigest}, size=${originalLength})`, 'info');
+
+            // Remove SHA256 if present (32 bytes at end)
+            let imageData;
+            if (hasSHA256) {
+                imageData = binaryString.substring(0, originalLength - 32);
+                logToConsole(`Removed SHA256 (32 bytes). Image size: ${imageData.length} bytes`, 'info');
+            } else {
+                imageData = binaryString;
+            }
+
+            // The last byte before SHA256 is the checksum
+            // Parse all segments to find where actual data ends
+            let offset = 24; // After 8-byte main header + 16-byte extended header
+            let segmentDataEnd = offset;
+            
+            logToConsole(`Parsing ${segmentCount} segments starting at offset ${offset}...`, 'info');
+            
+            for (let i = 0; i < segmentCount; i++) {
+                if (offset + 8 > imageData.length) {
+                    logToConsole(`ERROR: Segment ${i} header exceeds image bounds`, 'error');
+                    break;
+                }
+                
+                const segLoadAddr = binaryString.charCodeAt(offset) | (binaryString.charCodeAt(offset + 1) << 8) |
+                                   (binaryString.charCodeAt(offset + 2) << 16) | (binaryString.charCodeAt(offset + 3) << 24);
+                const segDataLen = binaryString.charCodeAt(offset + 4) | (binaryString.charCodeAt(offset + 5) << 8) |
+                                  (binaryString.charCodeAt(offset + 6) << 16) | (binaryString.charCodeAt(offset + 7) << 24);
+                
+                logToConsole(`  Segment ${i}: addr=0x${segLoadAddr.toString(16)}, len=${segDataLen} bytes`, 'info');
+                
+                offset += 8; // Segment header
+                offset += segDataLen; // Segment data
+                segmentDataEnd = offset;
+            }
+
+            logToConsole(`All segments end at offset ${segmentDataEnd}`, 'info');
+
+            // Now we have: [headers + segments] [padding] [checksum] [optional SHA256]
+            // CRITICAL: The checksum is calculated ONLY over segment DATA bytes
+            // NOT headers, NOT segment headers, NOT padding, NOT checksum itself
+            // Algorithm: checksum = 0xEF XOR (all segment data bytes)
+            
+            const oldChecksum = imageData.charCodeAt(imageData.length - 1);
+            
+            // Calculate new checksum: XOR only segment DATA (excluding all headers and padding)
+            let checksum = 0xEF;
+            let segmentOffset = 24; // After 8-byte main header + 16-byte extended header
+            let totalDataBytes = 0;
+            
+            for (let i = 0; i < segmentCount; i++) {
+                // Read segment header (8 bytes)
+                const segLoadAddr = binaryString.charCodeAt(segmentOffset) | (binaryString.charCodeAt(segmentOffset + 1) << 8) |
+                                   (binaryString.charCodeAt(segmentOffset + 2) << 16) | (binaryString.charCodeAt(segmentOffset + 3) << 24);
+                const segDataLen = binaryString.charCodeAt(segmentOffset + 4) | (binaryString.charCodeAt(segmentOffset + 5) << 8) |
+                                  (binaryString.charCodeAt(segmentOffset + 6) << 16) | (binaryString.charCodeAt(segmentOffset + 7) << 24);
+                
+                segmentOffset += 8; // Skip segment header
+                
+                // XOR all DATA bytes in this segment
+                for (let j = 0; j < segDataLen; j++) {
+                    checksum ^= binaryString.charCodeAt(segmentOffset + j);
+                }
+                
+                segmentOffset += segDataLen; // Move to next segment
+                totalDataBytes += segDataLen;
+            }
+            
+            logToConsole(`Checksum: old=0x${oldChecksum.toString(16).padStart(2, '0').toUpperCase()}, new=0x${checksum.toString(16).padStart(2, '0').toUpperCase()}`, 'info');
+            logToConsole(`Checksum calculated over ${totalDataBytes} bytes (segment DATA only, excluding headers & padding)`, 'info');
+            
+            const dataBeforeChecksum = imageData.substring(0, imageData.length - 1);
+            logToConsole(`DEBUG: imageData.length=${imageData.length}, dataBeforeChecksum.length=${dataBeforeChecksum.length}`, 'info');
+
+            // Rebuild: [all data before checksum] [new checksum]
+            let rebuiltImage = dataBeforeChecksum + String.fromCharCode(checksum);
+            logToConsole(`DEBUG: rebuiltImage.length=${rebuiltImage.length}, checksum byte at -1 is 0x${rebuiltImage.charCodeAt(rebuiltImage.length - 1).toString(16)}`, 'info');
+            
+            // Verify size is still multiple of 16
+            if (rebuiltImage.length % 16 !== 0) {
+                logToConsole(`ERROR: Rebuilt image size ${rebuiltImage.length} is not multiple of 16!`, 'error');
+            } else {
+                logToConsole(`✓ Image with new checksum: ${rebuiltImage.length} bytes (multiple of 16: OK)`, 'success');
+            }
+
+            // If SHA256 was present, recalculate it
+            if (hasSHA256) {
+                try {
+                    // Convert binary string (including new checksum) to Uint8Array for SHA256 calculation
+                    const dataArray = new Uint8Array(rebuiltImage.length);
+                    for (let i = 0; i < rebuiltImage.length; i++) {
+                        dataArray[i] = rebuiltImage.charCodeAt(i);
+                    }
+
+                    // Calculate SHA256 using Web Crypto API
+                    const hashBuffer = await crypto.subtle.digest('SHA-256', dataArray);
+                    const hashArray = new Uint8Array(hashBuffer);
+                    
+                    // Convert hash to binary string
+                    let hashString = '';
+                    for (let i = 0; i < hashArray.length; i++) {
+                        hashString += String.fromCharCode(hashArray[i]);
+                    }
+                    
+                    // Log first few bytes of SHA256 for debugging
+                    const hashHex = Array.from(hashArray.slice(0, 8))
+                        .map(b => b.toString(16).padStart(2, '0'))
+                        .join(' ');
+                    logToConsole(`SHA256 (first 8 bytes): ${hashHex}...`, 'info');
+                    
+                    rebuiltImage += hashString;
+                    logToConsole(`✓ SHA256 digest recalculated. Final size: ${rebuiltImage.length} bytes`, 'success');
+                } catch (error) {
+                    logToConsole('ERROR: Could not recalculate SHA256: ' + error.message, 'error');
+                    throw error; // Don't continue with corrupted firmware
+                }
+            } else {
+                logToConsole('✓ Checksum recalculated (no SHA256 in image)', 'success');
+            }
+
+            return rebuiltImage;
+        };
 
         // Firmware configurations
         const firmwareConfigs = {
@@ -338,6 +760,37 @@
                     { path: 'Amoled-T-Display/Screencast/Firmware/partitions.bin', offset: 0x8000 },
                     { path: 'Amoled-T-Display/Screencast/Firmware/boot_app0.bin', offset: 0xe000 },
                     { path: 'Amoled-T-Display/Screencast/Firmware/firmware.bin', offset: 0x10000 }
+                ],
+                variables: [
+                    {
+                        firmware_name: '|*S*|',
+                        readable_name: 'WiFi Name (SSID)',
+                        default_value: 'ESP32-S3-T-Display',
+                        max_length: 100,
+                        type: 'text'
+                    },
+                    {
+                        firmware_name: '|*P*|',
+                        readable_name: 'WiFi Password',
+                        default_value: 'testtest',
+                        max_length: 100,
+                        type: 'text'
+                    },
+                    {
+                        firmware_name: '|*M*|',
+                        readable_name: 'MDNS Hostname (*.local)',
+                        default_value: 'esp32-s3-t-display',
+                        postfix: '.local',
+                        max_length: 100,
+                        type: 'text'
+                    },
+                    {
+                        firmware_name: 'WebRTC Stream',
+                        readable_name: 'Display Name.',
+                        default_value: 'WebRTC Stream',
+                        max_length: 13,
+                        type: 'text'
+                    }
                 ]
             }
         };
@@ -363,6 +816,14 @@
             progressBar.style.width = percentage + '%';
             progressBar.textContent = Math.round(percentage) + '%';
         }
+
+        const formatMacAddr = (macAddr) => {
+            return macAddr.map((value) => value.toString(16).toUpperCase().padStart(2, '0')).join(':');
+        };
+
+        const sleep = (ms) => {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+        };
 
         connectBtn.addEventListener('click', async () => {
             if (connected) {
@@ -423,6 +884,91 @@
             }
         });
 
+        // Function to load and prepare modified firmware for download
+        const prepareModifiedFirmware = async () => {
+            const selectedFirmware = firmwareSelect.value;
+            const config = firmwareConfigs[selectedFirmware];
+
+            // Find the firmware.bin file
+            const firmwareFile = config.files.find(f => f.path.endsWith('firmware.bin'));
+            if (!firmwareFile) {
+                throw new Error('firmware.bin not found in configuration');
+            }
+
+            // Validate file path
+            if (!VALID_FIRMWARE_PATHS.includes(firmwareFile.path)) {
+                throw new Error(`Invalid firmware path: ${firmwareFile.path}`);
+            }
+
+            // Load firmware.bin
+            logToConsole(`Loading ${firmwareFile.path}...`, 'info');
+            const response = await fetch(firmwareFile.path);
+            if (!response.ok) {
+                throw new Error(`Failed to load ${firmwareFile.path}: ${response.statusText}`);
+            }
+            const data = await response.arrayBuffer();
+
+            // Convert to binary string
+            const bytes = new Uint8Array(data);
+            let binaryString = '';
+            for (let i = 0; i < bytes.length; i++) {
+                binaryString += String.fromCharCode(bytes[i]);
+            }
+
+            // Replace variables if configured
+            if (config.variables && config.variables.length > 0) {
+                logToConsole('Replacing variables in firmware...', 'info');
+                const { modifiedBinary, warnings } = await replaceVariablesInFirmware(
+                    binaryString,
+                    config.variables
+                );
+
+                warnings.forEach(warning => {
+                    logToConsole(warning, 'warning');
+                });
+
+                return modifiedBinary;
+            }
+
+            return binaryString;
+        };
+
+        // Download button handler
+        downloadBtn.addEventListener('click', async () => {
+            try {
+                downloadBtn.disabled = true;
+                logToConsole('Preparing firmware for download...', 'info');
+                showStatus('Preparing firmware...', 'info');
+
+                const modifiedFirmware = await prepareModifiedFirmware();
+
+                // Convert binary string to Blob
+                const bytes = new Uint8Array(modifiedFirmware.length);
+                for (let i = 0; i < modifiedFirmware.length; i++) {
+                    bytes[i] = modifiedFirmware.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: 'application/octet-stream' });
+
+                // Create download link
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'firmware_modified.bin';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                logToConsole(`✓ Firmware downloaded: firmware_modified.bin (${bytes.length} bytes)`, 'success');
+                showStatus('Firmware downloaded successfully!', 'success');
+            } catch (error) {
+                logToConsole('ERROR: Failed to prepare firmware: ' + error.message, 'error');
+                showStatus('Failed to prepare firmware: ' + error.message, 'error');
+            } finally {
+                downloadBtn.disabled = false;
+            }
+        });
+
         flashBtn.addEventListener('click', async () => {
             if (!connected) {
                 showStatus('Please connect to device first', 'warning');
@@ -444,6 +990,8 @@
 
                 // Load all firmware files
                 const fileArray = [];
+                let firmwareBinData = null; // Store firmware.bin for variable replacement
+                
                 for (let i = 0; i < config.files.length; i++) {
                     const file = config.files[i];
                     
@@ -460,12 +1008,26 @@
                             throw new Error(`Failed to load ${file.path}: ${response.statusText}`);
                         }
                         const data = await response.arrayBuffer();
-                        fileArray.push({
-                            data: new TextDecoder().decode(data),
-                            address: file.offset
-                        });
                         
-                        const progress = ((i + 1) / config.files.length) * 30;
+                        // Convert ArrayBuffer to binary string (required by esp-web-flasher)
+                        const bytes = new Uint8Array(data);
+                        let binaryString = '';
+                        for (let i = 0; i < bytes.length; i++) {
+                            binaryString += String.fromCharCode(bytes[i]);
+                        }
+                        
+                        // Check if this is firmware.bin and has variables
+                        const isFirmwareBin = file.path.endsWith('firmware.bin');
+                        if (isFirmwareBin && config.variables && config.variables.length > 0) {
+                            firmwareBinData = { binaryString, offset: file.offset, path: file.path };
+                        } else {
+                            fileArray.push({
+                                data: binaryString,
+                                address: file.offset
+                            });
+                        }
+                        
+                        const progress = ((i + 1) / config.files.length) * 20;
                         updateProgress(progress);
                         logToConsole(`✓ Loaded ${file.path} (${data.byteLength} bytes)`, 'success');
                     } catch (error) {
@@ -473,38 +1035,69 @@
                     }
                 }
 
+                // Process firmware.bin with variables if needed
+                if (firmwareBinData && config.variables) {
+                    logToConsole('Processing firmware variables...', 'info');
+                    const { modifiedBinary, warnings } = await replaceVariablesInFirmware(
+                        firmwareBinData.binaryString,
+                        config.variables
+                    );
+                    
+                    // Show warnings if any
+                    warnings.forEach(warning => {
+                        logToConsole(warning, 'warning');
+                    });
+                    
+                    fileArray.push({
+                        data: modifiedBinary,
+                        address: firmwareBinData.offset
+                    });
+                    
+                    logToConsole('✓ Variables processed', 'success');
+                } else if (firmwareBinData) {
+                    // No variables, add firmware.bin as-is
+                    fileArray.push({
+                        data: firmwareBinData.binaryString,
+                        address: firmwareBinData.offset
+                    });
+                }
+
                 logToConsole('All files loaded, starting flash...', 'info');
-                updateProgress(30);
+                updateProgress(20);
 
                 // Flash the files with proper configuration
                 const flashOptions = {
                     fileArray: fileArray,
-                    flashSize: "16MB",
-                    flashMode: "dio",
-                    flashFreq: "80m",
+                    flashSize: "keep",
                     eraseAll: false,
                     compress: true,
                     reportProgress: (fileIndex, written, total) => {
-                        const baseProgress = 30 + (fileIndex * 15);
-                        const fileProgress = (written / total) * 15;
-                        updateProgress(baseProgress + fileProgress);
+                        const baseProgress = 20 + ((fileIndex / fileArray.length) * 70) + ((written / total) * (70 / fileArray.length));
+                        updateProgress(baseProgress);
+                    },
+                    calculateMD5Hash: (image) => {
+                        // Simple MD5 calculation - you can use CryptoJS if needed
+                        return undefined; // Skip MD5 for now
                     }
                 };
 
                 await esploader.writeFlash(flashOptions);
                 
-                updateProgress(100);
+                updateProgress(90);
                 logToConsole('Flash completed successfully! ✨', 'success');
                 logToConsole('Performing hard reset...', 'info');
                 
                 // Hard reset the device after flashing (like --after hard_reset)
                 await esploader.hardReset();
+                await sleep(DISCONNECT_WAIT_MS);
                 
+                updateProgress(100);
                 logToConsole('Device reset complete!', 'success');
                 showStatus('Flash completed successfully! Device has been reset and should boot now.', 'success');
 
             } catch (error) {
                 logToConsole('Flash failed: ' + error.message, 'error');
+                console.error(error);
                 showStatus('Flash failed: ' + error.message, 'error');
                 updateProgress(0);
             } finally {
@@ -517,17 +1110,10 @@
         async function disconnect() {
             if (esploader) {
                 try {
-                    await esploader.hardReset();
+                    await esploader.disconnect();
+                    await sleep(DISCONNECT_WAIT_MS);
                 } catch (error) {
-                    console.log('Reset error:', error.message);
-                }
-            }
-            
-            if (device && device.readable) {
-                try {
-                    await device.close();
-                } catch (error) {
-                    console.log('Close error (port may already be closed):', error.message);
+                    console.log('Disconnect error:', error.message);
                 }
             }
             
@@ -535,21 +1121,15 @@
             connectBtn.textContent = 'Connect to ESP32-S3';
             connectBtn.classList.remove('connected');
             flashBtn.disabled = true;
-            transport = null;
             esploader = null;
-            device = null;
         }
 
-        // Check for Web Serial API support and esptool-js library
+        // Check for Web Serial API support
         window.addEventListener('load', () => {
-            if (!navigator.serial) {
+            if (!('serial' in navigator)) {
                 showStatus('Web Serial API is not supported in this browser. Please use Chrome, Edge, or Opera.', 'error');
                 connectBtn.disabled = true;
                 logToConsole('Web Serial API not supported', 'error');
-            } else if (typeof Transport === 'undefined' || typeof ESPLoader === 'undefined') {
-                showStatus('esptool-js library failed to load. Please check your internet connection and refresh the page.', 'error');
-                connectBtn.disabled = true;
-                logToConsole('esptool-js library not loaded', 'error');
             } else {
                 logToConsole('Web Serial API supported - Ready to connect!', 'success');
             }
@@ -564,6 +1144,21 @@
                 <strong>Files:</strong> ${config.files.map(f => f.path.split('/').pop()).join(', ')}<br>
                 <strong>Chip:</strong> ESP32-S3
             `;
+            
+            // Render variable inputs if present
+            renderVariables(config);
+            
+            // Enable download button if firmware has variables (can be downloaded without connection)
+            downloadBtn.disabled = !config.variables || config.variables.length === 0;
+        });
+
+        // Initialize with default firmware variables
+        window.addEventListener('load', () => {
+            const defaultConfig = firmwareConfigs[firmwareSelect.value];
+            renderVariables(defaultConfig);
+            
+            // Enable download button if default firmware has variables
+            downloadBtn.disabled = !defaultConfig.variables || defaultConfig.variables.length === 0;
         });
     </script>
 </body>

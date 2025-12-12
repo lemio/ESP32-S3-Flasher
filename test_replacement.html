@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Variable Replacement</title>
+</head>
+<body>
+    <h1>Test Variable Replacement Logic</h1>
+    <button onclick="test()">Run Test</button>
+    <pre id="output"></pre>
+
+    <script>
+        function test() {
+            const output = document.getElementById('output');
+            output.textContent = '';
+            
+            function log(msg) {
+                output.textContent += msg + '\n';
+            }
+
+            // Simulate the original firmware data
+            let binaryString = '';
+            // Add some data before
+            for (let i = 0; i < 100; i++) {
+                binaryString += String.fromCharCode(0x42); // 'B'
+            }
+            // Add the marker with padding
+            binaryString += '|*S*|';
+            for (let i = 0; i < 95; i++) {
+                binaryString += '\0';
+            }
+            // Add some data after
+            for (let i = 0; i < 100; i++) {
+                binaryString += String.fromCharCode(0x43); // 'C'
+            }
+
+            log(`Original length: ${binaryString.length}`);
+            log(`Marker at: ${binaryString.indexOf('|*S*|')}`);
+
+            // Test replacement
+            const searchString = '|*S*|';
+            const value = ' '; // User entered a space
+            const maxLen = 100;
+
+            const searchIndex = binaryString.indexOf(searchString);
+            log(`Found '${searchString}' at index: ${searchIndex}`);
+
+            const originalPaddedRegion = binaryString.substring(searchIndex, searchIndex + maxLen);
+            log(`Original padded region length: ${originalPaddedRegion.length}`);
+            log(`Original padded region (first 10 chars): ${JSON.stringify(originalPaddedRegion.substring(0, 10))}`);
+
+            // Create replacement
+            let replacement = value;
+            replacement += '\0';
+            while (replacement.length < maxLen) {
+                replacement += '\0';
+            }
+            log(`Replacement length: ${replacement.length}`);
+            log(`Replacement (first 10 chars): ${JSON.stringify(replacement.substring(0, 10))}`);
+
+            // Do replacement
+            const modifiedBinary = binaryString.substring(0, searchIndex) + 
+                                   replacement + 
+                                   binaryString.substring(searchIndex + maxLen);
+
+            log(`Modified length: ${modifiedBinary.length}`);
+            log(`Length changed: ${binaryString.length !== modifiedBinary.length}`);
+
+            // Check what changed
+            let changeCount = 0;
+            for (let i = 0; i < binaryString.length; i++) {
+                if (binaryString.charCodeAt(i) !== modifiedBinary.charCodeAt(i)) {
+                    if (changeCount < 10) {
+                        log(`  Byte ${i}: 0x${binaryString.charCodeAt(i).toString(16)} -> 0x${modifiedBinary.charCodeAt(i).toString(16)} ('${binaryString[i]}' -> '${modifiedBinary[i]}')`);
+                    }
+                    changeCount++;
+                }
+            }
+            log(`Total bytes changed: ${changeCount}`);
+
+            // Check the region
+            const newRegion = modifiedBinary.substring(searchIndex, searchIndex + maxLen);
+            log(`New region (first 10 chars): ${JSON.stringify(newRegion.substring(0, 10))}`);
+        }
+    </script>
+</body>
+</html>
