@@ -449,7 +449,7 @@
     </div>
 
     <script type="module">
-        import { Transport, ESPLoader } from 'https://unpkg.com/esptool-js@0.4.1/bundle.js';
+        import { Transport, ESPLoader } from 'https://unpkg.com/esptool-js@0.5.7/bundle.js';
 
         // ==================== CONFIGURATION ====================
         
@@ -976,9 +976,7 @@
                 try {
                     // First, try to cleanly disconnect the stub to exit download mode
                     log('Exiting download mode...', 'info');
-                    await esploader.flashFinish(true); // reboot=true
-                    await esploader.softReset();
-                    await esploader.hardReset();
+                    await esploader.after(); // reboot=true
                     log('Device should now boot into application', 'success');
                     } catch (e) {
                     log('Could not automatically reset - please press RESET button on device', 'warning');
