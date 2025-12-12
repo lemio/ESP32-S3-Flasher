@@ -12,341 +12,394 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            background: #f8f9fa;
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
             padding: 20px;
+            color: #1a1a1a;
         }
 
         .container {
             background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             max-width: 800px;
             width: 100%;
-            padding: 40px;
+            padding: 48px;
         }
 
         h1 {
-            color: #333;
-            margin-bottom: 10px;
+            color: #1a1a1a;
+            margin-bottom: 8px;
             text-align: center;
-            font-size: 2em;
+            font-size: 1.75em;
+            font-weight: 600;
+            letter-spacing: -0.02em;
         }
 
         .subtitle {
             text-align: center;
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 0.9em;
+            color: #6b7280;
+            margin-bottom: 40px;
+            font-size: 0.95em;
+            font-weight: 400;
         }
 
         .section {
-            margin-bottom: 25px;
+            margin-bottom: 32px;
+            padding-bottom: 32px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .section:last-of-type {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
         }
 
         .section-title {
-            font-size: 1.1em;
+            font-size: 0.875em;
             font-weight: 600;
-            color: #444;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-        }
-
-        .section-title::before {
-            content: '';
-            display: inline-block;
-            width: 4px;
-            height: 20px;
-            background: #667eea;
-            margin-right: 10px;
-            border-radius: 2px;
+            color: #6b7280;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         label {
             display: block;
             margin-bottom: 8px;
-            color: #555;
+            color: #1a1a1a;
             font-weight: 500;
+            font-size: 0.9em;
         }
 
         select, button {
             width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e0e0e0;
+            padding: 12px 16px;
+            border: 1px solid #e5e7eb;
             border-radius: 8px;
-            font-size: 1em;
-            transition: all 0.3s ease;
+            font-size: 0.95em;
+            transition: all 0.15s ease;
             font-family: inherit;
+            font-weight: 500;
         }
 
         select {
             background: white;
             cursor: pointer;
+            color: #1a1a1a;
         }
 
         select:hover {
-            border-color: #667eea;
+            border-color: #d1d5db;
         }
 
         select:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
         button {
-            background: #667eea;
-            color: white;
-            border: none;
+            background: white;
+            color: #1a1a1a;
+            border: 1px solid #e5e7eb;
             cursor: pointer;
-            font-weight: 600;
-            margin-top: 10px;
+            margin-top: 0;
         }
 
-        button:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
+        button:hover:not(:disabled) {
+            background: #f9fafb;
+            border-color: #d1d5db;
             transform: none;
             box-shadow: none;
         }
 
+        button:active:not(:disabled) {
+            background: #f3f4f6;
+        }
+
+        button:disabled {
+            background: #f9fafb;
+            color: #9ca3af;
+            cursor: not-allowed;
+            border-color: #e5e7eb;
+        }
+
+        /* Primary action button - Flash */
+        #flashBtn {
+            background: #3b82f6;
+            color: white;
+            border: 1px solid #3b82f6;
+        }
+
+        #flashBtn:hover:not(:disabled) {
+            background: #2563eb;
+            border-color: #2563eb;
+        }
+
+        #flashBtn:active:not(:disabled) {
+            background: #1d4ed8;
+        }
+
+        #flashBtn:disabled {
+            background: #e5e7eb;
+            border-color: #e5e7eb;
+            color: #9ca3af;
+        }
+
+        /* Connect button */
         #connectBtn {
-            background: #4CAF50;
+            background: #10b981;
+            color: white;
+            border: 1px solid #10b981;
         }
 
         #connectBtn:hover:not(:disabled) {
-            background: #45a049;
-            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+            background: #059669;
+            border-color: #059669;
         }
 
         #connectBtn.connected {
-            background: #f44336;
+            background: white;
+            color: #1a1a1a;
+            border: 1px solid #e5e7eb;
         }
 
         #connectBtn.connected:hover {
-            background: #da190b;
-            box-shadow: 0 5px 15px rgba(244, 67, 54, 0.4);
+            background: #f9fafb;
+            border-color: #d1d5db;
         }
 
         .console {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 15px;
+            background: #f9fafb;
+            color: #1a1a1a;
+            padding: 16px;
             border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.85em;
+            border: 1px solid #e5e7eb;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.8em;
             max-height: 300px;
             overflow-y: auto;
             white-space: pre-wrap;
             word-wrap: break-word;
-            margin-top: 10px;
+            line-height: 1.6;
         }
 
         .console:empty::before {
             content: 'Console output will appear here...';
-            color: #666;
+            color: #9ca3af;
         }
 
         .status {
-            padding: 10px 15px;
+            padding: 12px 16px;
             border-radius: 8px;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
             display: none;
+            font-size: 0.9em;
+            font-weight: 500;
         }
 
         .status.info {
-            background: #e3f2fd;
-            color: #1976d2;
-            border-left: 4px solid #1976d2;
+            background: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #dbeafe;
         }
 
         .status.success {
-            background: #e8f5e9;
-            color: #2e7d32;
-            border-left: 4px solid #2e7d32;
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #dcfce7;
         }
 
         .status.error {
-            background: #ffebee;
-            color: #c62828;
-            border-left: 4px solid #c62828;
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fee2e2;
         }
 
         .status.warning {
-            background: #fff3e0;
-            color: #e65100;
-            border-left: 4px solid #e65100;
+            background: #fffbeb;
+            color: #92400e;
+            border: 1px solid #fef3c7;
         }
 
         .progress-container {
             width: 100%;
-            height: 25px;
-            background: #e0e0e0;
-            border-radius: 12px;
+            height: 8px;
+            background: #f3f4f6;
+            border-radius: 4px;
             overflow: hidden;
-            margin-top: 15px;
+            margin-top: 16px;
             display: none;
         }
 
         .progress-bar {
             height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            background: #3b82f6;
             width: 0%;
             transition: width 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 0.8em;
-            font-weight: 600;
+            border-radius: 4px;
+        }
+
+        .progress-text {
+            font-size: 0.85em;
+            color: #6b7280;
+            margin-top: 8px;
+            text-align: center;
+            display: none;
         }
 
         .firmware-info {
-            background: #f5f5f5;
-            padding: 12px;
-            border-radius: 6px;
-            margin-top: 10px;
-            font-size: 0.9em;
-            color: #666;
+            background: #f9fafb;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 12px;
+            font-size: 0.875em;
+            color: #6b7280;
+            border: 1px solid #f0f0f0;
+            line-height: 1.6;
         }
 
         .firmware-info strong {
-            color: #333;
+            color: #1a1a1a;
+            font-weight: 600;
         }
 
         .variables-section {
-            margin-top: 15px;
-            padding: 15px;
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            border-radius: 6px;
+            margin-top: 20px;
+            padding: 20px;
+            background: #fffbeb;
+            border: 1px solid #fef3c7;
+            border-radius: 8px;
         }
 
         .variables-section h3 {
-            margin: 0 0 15px 0;
-            font-size: 1em;
-            color: #856404;
+            margin: 0 0 16px 0;
+            font-size: 0.9em;
+            color: #1a1a1a;
+            font-weight: 600;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
         .variables-section h3 button {
-            padding: 4px 10px;
+            padding: 6px 12px;
             font-size: 0.85em;
-            background: #fff;
-            color: #856404;
-            border: 1px solid #856404;
-            border-radius: 4px;
+            background: white;
+            color: #1a1a1a;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
             cursor: pointer;
-            font-weight: normal;
+            font-weight: 500;
+            margin: 0;
         }
 
         .variables-section h3 button:hover {
-            background: #fff8e1;
+            background: #f9fafb;
+            border-color: #d1d5db;
         }
 
         .variable-input-group {
-            margin-bottom: 12px;
+            margin-bottom: 16px;
+        }
+
+        .variable-input-group:last-child {
+            margin-bottom: 0;
         }
 
         .variable-input-group label {
             display: block;
-            margin-bottom: 5px;
-            font-size: 0.9em;
-            color: #555;
+            margin-bottom: 6px;
+            font-size: 0.875em;
+            color: #1a1a1a;
             font-weight: 500;
         }
 
         .variable-input-wrapper {
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 8px;
         }
 
         .variable-input-wrapper input {
             flex: 1;
-            padding: 8px 10px;
-            border: 2px solid #e0e0e0;
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
             border-radius: 6px;
             font-size: 0.9em;
-            font-family: 'Courier New', monospace;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            background: white;
         }
 
         .variable-input-wrapper input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
         .variable-input-wrapper .postfix,
         .variable-input-wrapper .prefix {
-            color: #666;
-            font-size: 0.9em;
-            font-family: 'Courier New', monospace;
+            color: #6b7280;
+            font-size: 0.875em;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
             white-space: nowrap;
+            font-weight: 500;
         }
 
         .button-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .button-group button {
-            flex: 1;
-            min-width: 200px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
         }
 
         .btn-secondary {
             background: white;
-            color: #667eea;
-            border: 2px solid #667eea;
+            color: #1a1a1a;
+            border: 1px solid #e5e7eb;
         }
 
         .btn-secondary:hover:not(:disabled) {
-            background: #f8f9ff;
+            background: #f9fafb;
+            border-color: #d1d5db;
         }
 
         .btn-secondary:disabled {
-            background: #f5f5f5;
-            color: #999;
-            border-color: #ddd;
-            cursor: not-allowed;
+            background: #f9fafb;
+            color: #9ca3af;
+            border-color: #e5e7eb;
+        }
+
+        .info-text {
+            margin-top: 12px;
+            font-size: 0.85em;
+            color: #6b7280;
+            line-height: 1.5;
         }
 
         @media (max-width: 600px) {
             .container {
-                padding: 25px;
+                padding: 32px 24px;
             }
 
             h1 {
                 font-size: 1.5em;
             }
 
-            .button-group button {
-                min-width: 100%;
+            .button-group {
+                grid-template-columns: 1fr;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚀 ESP32-S3 Web Flasher</h1>
+        <h1>ESP32-S3 Web Flasher</h1>
         <p class="subtitle">Flash your ESP32-S3 device directly from your browser</p>
 
         <div class="status" id="status"></div>
@@ -369,23 +422,24 @@
         <div class="section">
             <div class="section-title">2. Connect Device</div>
             <button id="connectBtn">Connect to ESP32-S3</button>
-            <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                ⚠️ Make sure your device is in download mode and connected via USB
+            <p class="info-text">
+                Make sure your device is connected via USB and in download mode
             </p>
         </div>
 
         <div class="section">
             <div class="section-title">3. Flash or Download Firmware</div>
             <div class="button-group">
-                <button id="downloadBtn" class="btn-secondary" disabled>📥 Download Modified Firmware</button>
-                <button id="flashBtn" disabled>⚡ Flash Device</button>
+                <button id="downloadBtn" class="btn-secondary" disabled>Download Modified Firmware</button>
+                <button id="flashBtn" disabled>Flash Device</button>
             </div>
-            <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                💡 Tip: Download first to verify your configuration before flashing
+            <p class="info-text">
+                Tip: Download first to verify your configuration before flashing
             </p>
             <div class="progress-container" id="progressContainer">
-                <div class="progress-bar" id="progressBar">0%</div>
+                <div class="progress-bar" id="progressBar"></div>
             </div>
+            <div class="progress-text" id="progressText">0%</div>
         </div>
 
         <div class="section">
@@ -471,7 +525,11 @@
         
         const updateProgress = (percentage) => {
             elements.progressBar.style.width = percentage + '%';
-            elements.progressBar.textContent = Math.round(percentage) + '%';
+            const progressText = document.getElementById('progressText');
+            if (progressText) {
+                progressText.textContent = Math.round(percentage) + '%';
+                progressText.style.display = percentage > 0 ? 'block' : 'none';
+            }
         };
 
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -626,7 +684,7 @@
                 return;
             }
 
-            let html = '<div class="variables-section"><h3><span>⚙️ Firmware Configuration</span><button id="resetVarsBtn">Reset to Defaults</button></h3>';
+            let html = '<div class="variables-section"><h3><span>Firmware Configuration</span><button id="resetVarsBtn">Reset to Defaults</button></h3>';
             
             config.variables.forEach((v, i) => {
                 const value = storage.get(v.firmware_name, v.default_value);
@@ -723,7 +781,9 @@
 
         const connect = async () => {
             log('Requesting device access...', 'info');
-            device = await navigator.serial.requestPort({});
+            device = await navigator.serial.requestPort({filters:[{usbProductId: 4097, usbVendorId: 12346}]});
+            
+            console.log(device.getInfo());
             transport = new Transport(device, true);
             
             esploader = new ESPLoader({
@@ -785,8 +845,29 @@
                     await connect();
                 }
             } catch (error) {
-                log(`Connection error: ${error.message}`, 'error');
-                showStatus(`Error: ${error.message}`, 'error');
+                const errorMsg = error.message.toLowerCase();
+                
+                // Check for boot mode error
+                if (errorMsg.includes("doesn't look like an image file") || 
+                    errorMsg.includes("invalid head of packet") ||
+                    errorMsg.includes("failed to connect")) {
+                    
+                    log('Device not in boot mode', 'error');
+                    showStatus('Device not in boot mode - Please enter boot mode', 'error');
+                    
+                    // Show detailed instructions
+                    log('', 'info');
+                    log('How to enter boot mode:', 'warning');
+                    log('1. Hold the BOOT button on your ESP32-S3', 'info');
+                    log('2. While holding BOOT, press the RESET button (or plug in USB)', 'info');
+                    log('3. Release both buttons', 'info');
+                    log('4. Click "Connect to ESP32-S3" again', 'info');
+                    log('', 'info');
+                } else {
+                    log(`Connection error: ${error.message}`, 'error');
+                    showStatus(`Error: ${error.message}`, 'error');
+                }
+                
                 await disconnect();
             }
         });
@@ -866,31 +947,78 @@
                 log('Starting flash...', 'info');
                 updateProgress(20);
 
+                // Calculate total bytes to flash
+                const totalBytes = fileArray.reduce((sum, file) => sum + file.data.length, 0);
+                let bytesWrittenSoFar = 0;
+
                 await esploader.writeFlash({
                     fileArray,
                     flashSize: "keep",
                     eraseAll: false,
                     compress: true,
                     reportProgress: (fileIndex, written, total) => {
-                        const progress = 20 + ((fileIndex / fileArray.length) * 70) + 
-                                       ((written / total) * (70 / fileArray.length));
-                        updateProgress(progress);
+                        // Calculate bytes written from completed files
+                        const completedBytes = fileArray.slice(0, fileIndex).reduce((sum, file) => sum + file.data.length, 0);
+                        
+                        // Total bytes written = completed files + current file progress
+                        const totalWritten = completedBytes + written;
+                        
+                        // Map to 20-90% range (leaving 0-20% for loading, 90-100% for reset)
+                        const flashProgress = (totalWritten / totalBytes) * 70;
+                        updateProgress(20 + flashProgress);
                     }
                 });
                 
                 updateProgress(90);
                 log('Flash complete! Resetting device...', 'success');
                 
-                await esploader.hardReset();
+                // ESP32-S3 needs special handling to exit boot mode and run the app
+                try {
+                    // First, try to cleanly disconnect the stub to exit download mode
+                    log('Exiting download mode...', 'info');
+                    await esploader.flashFinish(true); // reboot=true
+                    await esploader.softReset();
+                    await esploader.hardReset();
+                    log('Device should now boot into application', 'success');
+                    } catch (e) {
+                    log('Could not automatically reset - please press RESET button on device', 'warning');
+                }
+                
                 await sleep(CONFIG.DISCONNECT_WAIT_MS);
                 
                 updateProgress(100);
-                log('Device reset complete!', 'success');
+                log('Flash operation complete!', 'success');
                 showStatus('Flash successful! Device is now booting.', 'success');
 
             } catch (error) {
-                log(`Flash failed: ${error.message}`, 'error');
-                showStatus(`Flash failed: ${error.message}`, 'error');
+                const errorMsg = error.message.toLowerCase();
+                
+                // Check for boot mode error during flashing (timeout is most common indicator)
+                if (errorMsg.includes("timeout") ||
+                    errorMsg.includes("doesn't look like an image file") || 
+                    errorMsg.includes("invalid head of packet") ||
+                    errorMsg.includes("failed to write") ||
+                    errorMsg.includes("packet content transfer stopped")) {
+                    
+                    log('Flash failed: Device must be in boot mode BEFORE flashing!', 'error');
+                    showStatus('Flash failed - Enter boot mode first!', 'error');
+                    
+                    log('', 'info');
+                    log('⚠️  IMPORTANT: Enter boot mode BEFORE clicking Flash!', 'warning');
+                    log('', 'info');
+                    log('How to enter boot mode:', 'warning');
+                    log('1. Hold the BOOT button on your ESP32-S3', 'info');
+                    log('2. While holding BOOT, press the RESET button (or unplug/replug USB)', 'info');
+                    log('3. Release both buttons', 'info');
+                    log('4. The device is now in boot mode!', 'info');
+                    log('5. Click "Flash Firmware" again', 'info');
+                    log('', 'info');
+                    log('💡 Tip: You should enter boot mode AFTER connecting but BEFORE flashing', 'info');
+                } else {
+                    log(`Flash failed: ${error.message}`, 'error');
+                    showStatus(`Flash failed: ${error.message}`, 'error');
+                }
+                
                 updateProgress(0);
             } finally {
                 elements.flashBtn.disabled = false;
