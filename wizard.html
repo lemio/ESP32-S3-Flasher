@@ -282,6 +282,7 @@
         }
 
         .console {
+            display: none;
             background: #1a1a1a;
             color: #10b981;
             padding: 16px;
@@ -577,25 +578,15 @@
                 </p>
 
                 <div class="alert alert-info">
-                    <strong>⚠️ Important:</strong> Your device must be in boot mode to flash firmware. Follow the animation below.
+                    <strong>⚠️ Important:</strong> Your device must be in boot mode to flash firmware. Follow the video below.
                 </div>
 
                 <div class="animation-box">
-                    <div class="device-animation">
-                        <div class="usb-cable" id="usbCable"></div>
-                        <div class="device-board">
-                            <div class="usb-port"></div>
-                            <div class="led" id="statusLed"></div>
-                            <div class="button boot-button" id="bootButton">
-                                <div class="button-label">BOOT</div>
-                            </div>
-                            <div class="button reset-button" id="resetButton">
-                                <div class="button-label">RESET</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="instruction-text" id="bootInstructionText">Click "Start Boot Animation" to see how</div>
-                    <button class="btn-primary" id="animateBootBtn" style="margin-top: 16px;">Start Boot Animation</button>
+                    <video autoplay loop muted playsinline style="width: 400px; height: 400px; object-fit: cover; border-radius: 8px;">
+                        <source src="boot_mode.webm" type="video/webm">
+                        Your browser does not support the video tag.
+                    </video>
+                    <div class="instruction-text" style="margin-top: 16px;">How to enter boot mode</div>
                 </div>
 
                 <div class="instruction-steps">
@@ -664,16 +655,11 @@
                     </div>
 
                     <div class="animation-box">
-                        <div class="device-animation">
-                            <div class="device-board">
-                                <div class="usb-port"></div>
-                                <div class="led on flashing"></div>
-                                <div class="button reset-button" id="resetButtonStep3">
-                                    <div class="button-label">RESET</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="instruction-text">Press the RESET button</div>
+                        <video autoplay loop muted playsinline style="width: 400px; height: 400px; object-fit: cover; border-radius: 8px;">
+                            <source src="reset_only.webm" type="video/webm">
+                            Your browser does not support the video tag.
+                        </video>
+                        <div class="instruction-text" style="margin-top: 16px;">Press the RESET button</div>
                     </div>
                 </div>
             </div>
@@ -801,49 +787,7 @@
 
         // ==================== ANIMATION FUNCTIONS ====================
         
-        const animateBootSequence = async () => {
-            const cable = document.getElementById('usbCable');
-            const bootBtn = document.getElementById('bootButton');
-            const resetBtn = document.getElementById('resetButton');
-            const led = document.getElementById('statusLed');
-            const text = document.getElementById('bootInstructionText');
-            const animateBtn = document.getElementById('animateBootBtn');
-
-            animateBtn.disabled = true;
-
-            // Step 1: Connect USB
-            text.textContent = '1. Connect USB cable...';
-            cable.classList.add('connected');
-            await sleep(1500);
-
-            // Step 2: Hold BOOT
-            text.textContent = '2. Hold BOOT button...';
-            bootBtn.classList.add('pressed');
-            await sleep(1500);
-
-            // Step 3: Press RESET while holding BOOT
-            text.textContent = '3. Press RESET while holding BOOT...';
-            resetBtn.classList.add('pressed');
-            await sleep(500);
-            resetBtn.classList.remove('pressed');
-            await sleep(1000);
-
-            // Step 4: Release BOOT
-            text.textContent = '4. Release BOOT button';
-            bootBtn.classList.remove('pressed');
-            await sleep(1000);
-
-            // Step 5: Boot mode active
-            text.textContent = '✓ Device is now in boot mode!';
-            led.classList.add('on');
-            await sleep(2000);
-
-            // Reset animation
-            cable.classList.remove('connected');
-            led.classList.remove('on');
-            text.textContent = 'Click "Start Boot Animation" to see how';
-            animateBtn.disabled = false;
-        };
+        // Animation functions removed - using video files instead
 
         // ==================== FIRMWARE FUNCTIONS ====================
         
@@ -1159,17 +1103,29 @@
                 log('✅ Flash complete!', 3);
                 document.getElementById('flashStatus').textContent = 'Flash complete! Resetting device...';
                 
-                // Try to reset
-                try {
-                    await esploader.after();
-                    log('✓ Device reset successfully', 3);
-                    document.getElementById('flashStatus').textContent = 'Complete! Device is booting...';
-                } catch (e) {
-                    log('⚠️  Automatic reset failed', 3);
-                    document.getElementById('resetInstructions').style.display = 'block';
-                    document.getElementById('flashStatus').textContent = 'Flash complete - manual reset required';
-                }
+                // Show reset instructions
+                document.getElementById('resetInstructions').style.display = 'block';
+                document.getElementById('flashStatus').textContent = 'Flash complete - press RESET to continue';
                 
+                // Wait for device disconnect (happens when user presses RESET)
+                const waitForDisconnect = new Promise((resolve) => {
+                    const handleDisconnect = (event) => {
+                        if (event.target === device) {
+                            navigator.serial.removeEventListener('disconnect', handleDisconnect);
+                            resolve();
+                        }
+                    };
+                    navigator.serial.addEventListener('disconnect', handleDisconnect);
+                    
+                    // Also set a timeout as fallback
+                    setTimeout(() => {
+                        navigator.serial.removeEventListener('disconnect', handleDisconnect);
+                        resolve();
+                    }, 60000); // 60 second timeout
+                });
+                
+                await waitForDisconnect;
+                log('✓ Device reset detected', 3);
                 await sleep(2000);
                 
                 // Show expected behavior
@@ -1188,7 +1144,7 @@
                     if (chipInfo.mac) {
                         log(`📍 Device MAC: ${chipInfo.mac}`, 4);
                     }
-                }, 3000);
+                }, 1000);
                 
             } catch (error) {
                 log(`❌ Flash failed: ${error.message}`, 3);
@@ -1206,12 +1162,7 @@
 
         // ==================== EVENT HANDLERS ====================
         
-        document.getElementById('animateBootBtn').addEventListener('click', animateBootSequence);
-
-        document.getElementById('resetButtonStep3')?.addEventListener('click', function() {
-            this.classList.add('pressed');
-            setTimeout(() => this.classList.remove('pressed'), 200);
-        });
+        // Event handlers for animations removed - using video files instead
 
         document.getElementById('nextBtn').addEventListener('click', async () => {
             if (currentStep === 1) {
