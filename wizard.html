@@ -850,6 +850,10 @@
         let chipInfo = {};
         let isDeviceConnected = false;
 
+        // Check URL parameter for password hiding
+        const urlParams = new URLSearchParams(window.location.search);
+        const hidePassword = urlParams.get('hidePassword') === 'true';
+
         // ==================== UTILITY FUNCTIONS ====================
         
         const log = (message, step = currentStep) => {
@@ -1080,12 +1084,17 @@
             
             config.variables.forEach((v, i) => {
                 const value = storage.get(v.firmware_name, v.default_value);
+                const isPassword = v.readable_name.toLowerCase().includes('password');
+                const inputType = (hidePassword && isPassword) ? 'password' : 'text';
+                const labelClass = (hidePassword && isPassword) ? 'style="font-size: 0.8em; margin-bottom: 4px; color: #1a1a1a; filter: blur(4px); user-select: none;"' : 'style="font-size: 0.8em; margin-bottom: 4px; color: #1a1a1a;"';
+                
                 html += `
                     <div class="variable-input-group">
-                        <label for="var_${i}" style="font-size: 0.8em; margin-bottom: 4px; color: #1a1a1a;">${v.readable_name}</label>
+                        <label for="var_${i}" ${labelClass}>${v.readable_name}</label>
                         <div class="variable-input-wrapper">
-                            <input type="text" id="var_${i}" value="${value}" maxlength="${v.max_length || 100}" 
-                                   data-firmware-name="${v.firmware_name}">
+                            <input type="${inputType}" id="var_${i}" value="${value}" maxlength="${v.max_length || 100}" 
+                                   data-firmware-name="${v.firmware_name}"
+                                   ${hidePassword && isPassword ? 'style="filter: blur(4px);"' : ''}>
                             ${v.postfix ? `<span class="postfix">${v.postfix}</span>` : ''}
                         </div>
                     </div>`;
@@ -1272,9 +1281,17 @@
                         if (config.variables?.length) {
                             config.variables.forEach(variable => {
                                 const actualValue = configValues[variable.firmware_name] || variable.default_value;
+                                const isPassword = variable.readable_name.toLowerCase().includes('password');
+                                
+                                // If it's a password and hidePassword is enabled, wrap in blur span
+                                let replacementValue = actualValue;
+                                if (hidePassword && isPassword) {
+                                    replacementValue = `<span style="filter: blur(4px); user-select: none;">${actualValue}</span>`;
+                                }
+                                
                                 // Use global regex to replace all occurrences
                                 const regex = new RegExp(variable.firmware_name.replace(/[|*]/g, '\\$&'), 'g');
-                                processedItem = processedItem.replace(regex, actualValue);
+                                processedItem = processedItem.replace(regex, replacementValue);
                             });
                         }
                         
@@ -1292,10 +1309,14 @@
                         if (input) {
                             const value = input.value;
                             const displayValue = variable.postfix ? `${value}${variable.postfix}` : value;
+                            const isPassword = variable.readable_name.toLowerCase().includes('password');
+                            const valueStyle = (hidePassword && isPassword) ? 'style="filter: blur(4px); user-select: none;"' : '';
+                            const labelStyle = (hidePassword && isPassword) ? 'style="filter: blur(4px); user-select: none;"' : '';
+                            
                             summaryHtml += `
                                 <div class="chip-info-row">
-                                    <span class="chip-info-label">${variable.readable_name}:</span>
-                                    <span class="chip-info-value">${displayValue}</span>
+                                    <span class="chip-info-label" ${labelStyle}>${variable.readable_name}:</span>
+                                    <span class="chip-info-value" ${valueStyle}>${displayValue}</span>
                                 </div>`;
                         }
                     });
