@@ -408,13 +408,10 @@
             <div class="section-title">1. Select Firmware</div>
             <label for="firmwareSelect">Choose firmware to flash:</label>
             <select id="firmwareSelect">
-                <option value="amoled-t-display">Amoled T-Display - Factory Firmware</option>
-                <option value="amoled-screencast">Amoled T-Display - Screencast</option>
+                <!-- Options populated dynamically from config.js -->
             </select>
             <div class="firmware-info">
-                <strong>Selected:</strong> Amoled T-Display Factory Firmware<br>
-                <strong>Files:</strong> bootloader.bin, partitions.bin, boot_app0.bin, firmware.bin<br>
-                <strong>Chip:</strong> ESP32-S3
+                <!-- Firmware info populated dynamically -->
             </div>
             <div id="variablesContainer"></div>
         </div>
@@ -645,6 +642,18 @@
 
         // ==================== UI FUNCTIONS ====================
         
+        const populateFirmwareSelect = () => {
+            const select = elements.firmwareSelect;
+            select.innerHTML = '';
+            
+            Object.entries(FIRMWARE_CONFIGS).forEach(([key, config]) => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = config.name;
+                select.appendChild(option);
+            });
+        };
+
         const renderVariables = (config) => {
             if (!config.variables?.length) {
                 elements.variablesContainer.innerHTML = '';
@@ -1008,9 +1017,16 @@
                 log('Web Serial API ready', 'success');
             }
             
-            // Initialize with default firmware
-            const defaultConfig = FIRMWARE_CONFIGS[elements.firmwareSelect.value];
-            updateFirmwareInfo(defaultConfig);
+            // Populate firmware dropdown from config
+            populateFirmwareSelect();
+            
+            // Initialize with first firmware in config
+            const firstFirmwareKey = Object.keys(FIRMWARE_CONFIGS)[0];
+            if (firstFirmwareKey) {
+                elements.firmwareSelect.value = firstFirmwareKey;
+                const defaultConfig = FIRMWARE_CONFIGS[firstFirmwareKey];
+                updateFirmwareInfo(defaultConfig);
+            }
         });
     </script>
 </body>
