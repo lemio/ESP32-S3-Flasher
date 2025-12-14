@@ -1,5 +1,7 @@
 # ESP32-S3 Web Flasher
 
+You can try it out youself on Github pages. [Wizard](https://lemio.github.io/ESP32-S3-Flasher/wizard.html) & [Advanced](https://lemio.github.io/ESP32-S3-Flasher/index.html)
+
 https://github.com/user-attachments/assets/0cbbe652-9fc3-4732-ac1d-91ecdca1defe
 
 A simple, browser-based tool for flashing ESP32-S3 devices using the Web Serial API. Built with the ESPtool-js library made by [Esperessif](https://github.com/espressif/esptool-js). Next to flashing it can also alter the firmware by replacing *magic* keywords with other content; this could be usefull for wifi setup or other settings that you want end-users to change.
