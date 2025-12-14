@@ -1,5 +1,7 @@
 # ESP32-S3 Web Flasher
 
+https://github.com/user-attachments/assets/0cbbe652-9fc3-4732-ac1d-91ecdca1defe
+
 A simple, browser-based tool for flashing ESP32-S3 devices using the Web Serial API. Built with the ESPtool-js library made by [Esperessif](https://github.com/espressif/esptool-js). Next to flashing it can also alter the firmware by replacing *magic* keywords with other content; this could be usefull for wifi setup or other settings that you want end-users to change.
 
 ## The User Interface
@@ -56,6 +58,9 @@ For firmware with configurable variables:
 2. When you enter values, they replace the entire 100-byte region
 3. The firmware checksum is automatically recalculated over segment data only (see [CHECKSUM_ALGORITHM.md](CHECKSUM_ALGORITHM.md))
 4. If present, the SHA256 digest is recalculated and appended
+
+<img width="8428" height="2926" alt="image" src="https://github.com/user-attachments/assets/1edfbe3e-7257-45a0-90f9-35487db0d376" />
+
 
 ### Flashing Process
 
