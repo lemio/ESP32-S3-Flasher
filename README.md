@@ -70,12 +70,6 @@ The firmware is loaded from the repository and flashed to the following addresse
 - `0xe000`: boot_app0.bin
 - `0x10000`: firmware.bin (with variable replacements if configured)
 
-## Technical Documentation
-
-For detailed information about the ESP32 firmware checksum algorithm, see [CHECKSUM_ALGORITHM.md](CHECKSUM_ALGORITHM.md).
-
-**Key insight**: The ESP32 checksum is calculated only over segment DATA bytes, not headers or padding. This was discovered through extensive reverse-engineering and validation against esptool.
-
 ## Configure it for your own project
 
 All firmware configurations and device settings are now centralized in `config.js`, making it easy to add your own firmware or devices.
