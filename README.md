@@ -275,6 +275,3 @@ open http://localhost:8080
 - Check that the firmware supports variable replacement (look for the "Variables" section)
 - Verify the console output shows "Replacing variables in firmware..."
 
-## License
-
-This project uses firmware from LilyGo's AMOLED series devices.
