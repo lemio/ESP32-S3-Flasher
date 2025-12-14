@@ -792,53 +792,7 @@
 
     <script type="module">
         import { Transport, ESPLoader } from 'https://unpkg.com/esptool-js@0.5.7/bundle.js';
-
-        // ==================== CONFIGURATION ====================
-        
-        const CONFIG = {
-            DISCONNECT_WAIT_MS: 1500,
-            BAUD_RATE: 115200,
-            CHIP_NAME: "ESP32-S3"
-        };
-
-        const FIRMWARE_CONFIGS = {
-            'amoled-t-display': {
-                name: 'Amoled T-Display Factory Firmware',
-                description: 'Default factory firmware for Amoled T-Display',
-                expectedBehavior: [
-                    'Display shows factory test screen',
-                    'Touch interface should be responsive',
-                    'LEDs may light up in sequence'
-                ],
-                files: [
-                    { path: 'Amoled-T-Display/Factory/Firmware/partitions.bin', offset: 0x8000 },
-                    { path: 'Amoled-T-Display/Factory/Firmware/boot_app0.bin', offset: 0xe000 },
-                    { path: 'Amoled-T-Display/Factory/Firmware/firmware.bin', offset: 0x10000 }
-                ]
-            },
-            'amoled-screencast': {
-                name: 'Amoled T-Display Screencast',
-                description: 'WebRTC streaming firmware with WiFi configuration',
-                expectedBehavior: [
-                    'Device connects to WiFi network <b>|*S*|</b> with password <b>|*P*|</b>',
-                    'Access web interface at <a href="http://|*M*|.local" target="_blank">http://|*M*|.local</a>',
-                    'Stream display content via WebRTC',
-                    'Display shows connection status'
-                ],
-                files: [
-                    { path: 'Amoled-T-Display/Screencast/Firmware/bootloader.bin', offset: 0x0000 },
-                    { path: 'Amoled-T-Display/Screencast/Firmware/partitions.bin', offset: 0x8000 },
-                    { path: 'Amoled-T-Display/Screencast/Firmware/boot_app0.bin', offset: 0xe000 },
-                    { path: 'Amoled-T-Display/Screencast/Firmware/firmware.bin', offset: 0x10000 }
-                ],
-                variables: [
-                    { firmware_name: '|*S*|', readable_name: 'WiFi Name (SSID)', default_value: 'ESP32-S3-T-Display', max_length: 100 },
-                    { firmware_name: '|*P*|', readable_name: 'WiFi Password', default_value: 'testtest', max_length: 100 },
-                    { firmware_name: '|*M*|', readable_name: 'MDNS Hostname', default_value: 'esp32-s3-t-display', postfix: '.local', max_length: 100 },
-                    { firmware_name: 'WebRTC Stream', readable_name: 'Display Name', default_value: 'WebRTC Stream', max_length: 13 }
-                ]
-            }
-        };
+        import { CONFIG, FIRMWARE_CONFIGS } from './config.js';
 
         // ==================== STATE ====================
         
@@ -849,6 +803,10 @@
         let selectedFirmware = null;
         let chipInfo = {};
         let isDeviceConnected = false;
+
+        // Check URL parameter for password hiding
+        const urlParams = new URLSearchParams(window.location.search);
+        const hidePassword = urlParams.get('hidePassword') === 'true';
 
         // ==================== UTILITY FUNCTIONS ====================
         
@@ -1080,12 +1038,17 @@
             
             config.variables.forEach((v, i) => {
                 const value = storage.get(v.firmware_name, v.default_value);
+                const isPassword = v.readable_name.toLowerCase().includes('password');
+                const inputType = (hidePassword && isPassword) ? 'password' : 'text';
+                const labelClass = (hidePassword && isPassword) ? 'style="font-size: 0.8em; margin-bottom: 4px; color: #1a1a1a; filter: blur(4px); user-select: none;"' : 'style="font-size: 0.8em; margin-bottom: 4px; color: #1a1a1a;"';
+                
                 html += `
                     <div class="variable-input-group">
-                        <label for="var_${i}" style="font-size: 0.8em; margin-bottom: 4px; color: #1a1a1a;">${v.readable_name}</label>
+                        <label for="var_${i}" ${labelClass}>${v.readable_name}</label>
                         <div class="variable-input-wrapper">
-                            <input type="text" id="var_${i}" value="${value}" maxlength="${v.max_length || 100}" 
-                                   data-firmware-name="${v.firmware_name}">
+                            <input type="${inputType}" id="var_${i}" value="${value}" maxlength="${v.max_length || 100}" 
+                                   data-firmware-name="${v.firmware_name}"
+                                   ${hidePassword && isPassword ? 'style="filter: blur(4px);"' : ''}>
                             ${v.postfix ? `<span class="postfix">${v.postfix}</span>` : ''}
                         </div>
                     </div>`;
@@ -1106,7 +1069,7 @@
                 log('🔌 Requesting device access...', 1);
                 
                 device = await navigator.serial.requestPort({
-                    filters: [{ usbProductId: 4097, usbVendorId: 12346 }]
+                    filters: CONFIG.FILTERS
                 });
                 
                 // Add disconnect listener
@@ -1272,9 +1235,17 @@
                         if (config.variables?.length) {
                             config.variables.forEach(variable => {
                                 const actualValue = configValues[variable.firmware_name] || variable.default_value;
+                                const isPassword = variable.readable_name.toLowerCase().includes('password');
+                                
+                                // If it's a password and hidePassword is enabled, wrap in blur span
+                                let replacementValue = actualValue;
+                                if (hidePassword && isPassword) {
+                                    replacementValue = `<span style="filter: blur(4px); user-select: none;">${actualValue}</span>`;
+                                }
+                                
                                 // Use global regex to replace all occurrences
                                 const regex = new RegExp(variable.firmware_name.replace(/[|*]/g, '\\$&'), 'g');
-                                processedItem = processedItem.replace(regex, actualValue);
+                                processedItem = processedItem.replace(regex, replacementValue);
                             });
                         }
                         
@@ -1292,10 +1263,14 @@
                         if (input) {
                             const value = input.value;
                             const displayValue = variable.postfix ? `${value}${variable.postfix}` : value;
+                            const isPassword = variable.readable_name.toLowerCase().includes('password');
+                            const valueStyle = (hidePassword && isPassword) ? 'style="filter: blur(4px); user-select: none;"' : '';
+                            const labelStyle = (hidePassword && isPassword) ? 'style="filter: blur(4px); user-select: none;"' : '';
+                            
                             summaryHtml += `
                                 <div class="chip-info-row">
-                                    <span class="chip-info-label">${variable.readable_name}:</span>
-                                    <span class="chip-info-value">${displayValue}</span>
+                                    <span class="chip-info-label" ${labelStyle}>${variable.readable_name}:</span>
+                                    <span class="chip-info-value" ${valueStyle}>${displayValue}</span>
                                 </div>`;
                         }
                     });
