@@ -138,6 +138,9 @@ Each firmware configuration has the following structure:
 }
 ```
 
+This will result in this UI:
+<img width="962" height="416" alt="image" src="https://github.com/user-attachments/assets/8c104666-036a-4e3f-b586-23093ea244ac" />
+
 ### Adding Your Own Firmware
 
 1. **Prepare your firmware files:**
