@@ -792,53 +792,7 @@
 
     <script type="module">
         import { Transport, ESPLoader } from 'https://unpkg.com/esptool-js@0.5.7/bundle.js';
-
-        // ==================== CONFIGURATION ====================
-        
-        const CONFIG = {
-            DISCONNECT_WAIT_MS: 1500,
-            BAUD_RATE: 115200,
-            CHIP_NAME: "ESP32-S3"
-        };
-
-        const FIRMWARE_CONFIGS = {
-            'amoled-t-display': {
-                name: 'Amoled T-Display Factory Firmware',
-                description: 'Default factory firmware for Amoled T-Display',
-                expectedBehavior: [
-                    'Display shows factory test screen',
-                    'Touch interface should be responsive',
-                    'LEDs may light up in sequence'
-                ],
-                files: [
-                    { path: 'Amoled-T-Display/Factory/Firmware/partitions.bin', offset: 0x8000 },
-                    { path: 'Amoled-T-Display/Factory/Firmware/boot_app0.bin', offset: 0xe000 },
-                    { path: 'Amoled-T-Display/Factory/Firmware/firmware.bin', offset: 0x10000 }
-                ]
-            },
-            'amoled-screencast': {
-                name: 'Amoled T-Display Screencast',
-                description: 'WebRTC streaming firmware with WiFi configuration',
-                expectedBehavior: [
-                    'Device connects to WiFi network <b>|*S*|</b> with password <b>|*P*|</b>',
-                    'Access web interface at <a href="http://|*M*|.local" target="_blank">http://|*M*|.local</a>',
-                    'Stream display content via WebRTC',
-                    'Display shows connection status'
-                ],
-                files: [
-                    { path: 'Amoled-T-Display/Screencast/Firmware/bootloader.bin', offset: 0x0000 },
-                    { path: 'Amoled-T-Display/Screencast/Firmware/partitions.bin', offset: 0x8000 },
-                    { path: 'Amoled-T-Display/Screencast/Firmware/boot_app0.bin', offset: 0xe000 },
-                    { path: 'Amoled-T-Display/Screencast/Firmware/firmware.bin', offset: 0x10000 }
-                ],
-                variables: [
-                    { firmware_name: '|*S*|', readable_name: 'WiFi Name (SSID)', default_value: 'ESP32-S3-T-Display', max_length: 100 },
-                    { firmware_name: '|*P*|', readable_name: 'WiFi Password', default_value: 'testtest', max_length: 100 },
-                    { firmware_name: '|*M*|', readable_name: 'MDNS Hostname', default_value: 'esp32-s3-t-display', postfix: '.local', max_length: 100 },
-                    { firmware_name: 'WebRTC Stream', readable_name: 'Display Name', default_value: 'WebRTC Stream', max_length: 13 }
-                ]
-            }
-        };
+        import { CONFIG, FIRMWARE_CONFIGS } from './config.js';
 
         // ==================== STATE ====================
         
@@ -1115,7 +1069,7 @@
                 log('🔌 Requesting device access...', 1);
                 
                 device = await navigator.serial.requestPort({
-                    filters: [{ usbProductId: 4097, usbVendorId: 12346 }]
+                    filters: CONFIG.FILTERS
                 });
                 
                 // Add disconnect listener
