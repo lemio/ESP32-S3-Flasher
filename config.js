@@ -41,7 +41,8 @@ const FIRMWARE_CONFIGS = {
         description: 'WebRTC streaming firmware with WiFi configuration',
         expectedBehavior: [
             'Device connects to WiFi network <b>|*S*|</b> with password <b>|*P*|</b>',
-            'Access web interface at <a href="http://|*M*|.local" target="_blank">http://|*M*|.local</a>',
+            'Control the display via <a href="/Amoled-T-Display/Screencast/webrtc_stream.html?espAddress=|*M*|.local&sourceType=screen" target="_blank">this interface</a>',
+            'Access web local interface at <a href="http://|*M*|.local" target="_blank">http://|*M*|.local</a>',
             'Stream display content via WebRTC',
             'Display shows connection status'
         ],
