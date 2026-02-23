@@ -140,13 +140,16 @@ This will result in this UI:
 ### Adding Your Own Firmware
 
 1. **Prepare your firmware files:**
+
+https://github.com/user-attachments/assets/97ec71ab-b551-4dcd-8168-1653a513b4b9
+
    - Place them in a subdirectory (e.g., `MyDevice/Firmware/`)
    - You'll need: `bootloader.bin`, `partitions.bin`, `boot_app0.bin`, `firmware.bin`
    - You can find them in the subfolder of platformIO project; for example `LilyGo-AMOLED-WebJPEG/.pio/build/T-Display-AMOLED/firmware.bin` 
    - Only the `boot_app0.bin` you can find in `~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin` on mac
    - To find these files you can use the *Verbose Upload* option in platformIO
 
-2. **Add configuration to `config.js`:**
+3. **Add configuration to `config.js`:**
 
 ```javascript
 'my-custom-firmware': {
