@@ -11,12 +11,14 @@
    - [The Image Header](#21-the-image-header)
    - [The Extended Image Header](#22-the-extended-image-header)
    - [Segment Headers and Data](#23-segment-headers-and-data)
+   - [Worked Example — Parsing Real Firmware Headers](#24-worked-example--parsing-real-firmware-headers)
 3. [The XOR Checksum Algorithm](#3-the-xor-checksum-algorithm)
 4. [The SHA-256 Hash Digest](#4-the-sha-256-hash-digest)
 5. [Variable Replacement and Why Integrity Must Be Recalculated](#5-variable-replacement-and-why-integrity-must-be-recalculated)
 6. [How This Tool Recalculates Integrity Step by Step](#6-how-this-tool-recalculates-integrity-step-by-step)
 7. [How Other Architectures Handle This](#7-how-other-architectures-handle-this)
 8. [Further Reading](#8-further-reading)
+9. [The ESP32 Flash Map and Boot Sequence](#9-the-esp32-flash-map-and-boot-sequence)
 
 ---
 
@@ -161,6 +163,94 @@ const segDataLen = binaryString.charCodeAt(offset + 4) |
 ```
 
 > **Little-endian** means the least significant byte comes first in memory. So the value `0x00001000` (4096 in decimal) is stored as the four bytes `00 10 00 00`.
+
+### 2.4 Worked Example — Parsing Real Firmware Headers
+
+Let's apply every field definition above to the first 32 bytes of two real binaries: a compiled application (`firmware.bin`) and its companion `bootloader.bin`. Both are ESP32-S3 images produced by PlatformIO.
+
+#### firmware.bin — first 32 bytes
+
+```
+Offset   00  01  02  03  04  05  06  07
+───────────────────────────────────────────────────────────
+0x0000   E9  06  02  4F  88  7A  37  40   ← Image Header
+0x0008   EE  00  00  00  09  00  00  00   ← Extended Header (bytes 8–15)
+0x0010   00  FF  FF  00  00  00  00  01   ← Extended Header (bytes 16–23)
+0x0018   20  00  10  3C  64  2F  15  00   ← First Segment Header
+```
+
+**Image Header (bytes 0–7):**
+
+| Offset | Hex  | Field            | Interpretation                                         |
+|--------|------|------------------|--------------------------------------------------------|
+| 0      | `E9` | `magic`          | ✅ Valid ESP32 image                                   |
+| 1      | `06` | `segment_count`  | 6 segments in this image                              |
+| 2      | `02` | `spi_mode`       | DIO (Dual I/O) flash mode                             |
+| 3      | `4F` | `spi_speed_size` | SPI clock speed and flash-size hint                   |
+| 4–7    | `88 7A 37 40` | `entry_addr` | `0x40377A88` (little-endian) — execution starts here |
+
+**Extended Header (bytes 8–23):**
+
+| Offset | Hex         | Field               | Interpretation                              |
+|--------|-------------|---------------------|---------------------------------------------|
+| 8      | `EE`        | `wp_pin`            | Write-protect pin (0xEE = unused)           |
+| 9–11   | `00 00 00`  | `spi_pin_drv`       | SPI pin drive strength (default)            |
+| 12–13  | `09 00`     | `chip_id`           | `0x0009` → ESP32-S3 ✅                      |
+| 14     | `00`        | `min_chip_rev`      | Minimum chip revision (legacy field)        |
+| 15–16  | `00 00`     | `min_chip_rev_full` | 0.0 — runs on any silicon revision         |
+| 17–18  | `FF FF`     | `max_chip_rev_full` | 65535 — no upper revision limit             |
+| 19–22  | `00 00 00 00` | `reserved`        | Must be zero                                |
+| 23     | `01`        | `hash_appended`     | `1` → a SHA-256 digest is appended ✅       |
+
+**First Segment Header (bytes 24–31):**
+
+| Bytes | Hex               | Field         | Interpretation                                               |
+|-------|-------------------|---------------|--------------------------------------------------------------|
+| 0–3   | `20 00 10 3C`     | `load_addr`   | `0x3C100020` — DROM (mapped flash, read-only data)          |
+| 4–7   | `64 2F 15 00`     | `data_length` | `0x00152F64` = 1,388,388 bytes ≈ 1.35 MB of `.rodata`      |
+
+---
+
+#### bootloader.bin — first 32 bytes
+
+```
+Offset   00  01  02  03  04  05  06  07
+───────────────────────────────────────────────────────────
+0x0000   E9  03  02  4F  D0  98  3C  40   ← Image Header
+0x0008   EE  00  00  00  09  00  00  00   ← Extended Header (bytes 8–15)
+0x0010   00  FF  FF  00  00  00  00  01   ← Extended Header (bytes 16–23)
+0x0018   08  38  CE  3F  BC  04  00  00   ← First Segment Header
+```
+
+**Image Header (bytes 0–7):**
+
+| Offset | Hex  | Field            | Interpretation                                           |
+|--------|------|------------------|----------------------------------------------------------|
+| 0      | `E9` | `magic`          | ✅ Valid ESP32 image                                     |
+| 1      | `03` | `segment_count`  | 3 segments (bootloader is much smaller than the app)    |
+| 2      | `02` | `spi_mode`       | DIO flash mode (must match the hardware)                |
+| 3      | `4F` | `spi_speed_size` | SPI clock speed and flash-size hint                     |
+| 4–7    | `D0 98 3C 40` | `entry_addr` | `0x403C98D0` — CPU jumps here to start the bootloader  |
+
+**Extended Header (bytes 8–23):** identical to `firmware.bin` — same chip, same settings.
+
+**First Segment Header (bytes 24–31):**
+
+| Bytes | Hex           | Field         | Interpretation                                          |
+|-------|---------------|---------------|---------------------------------------------------------|
+| 0–3   | `08 38 CE 3F` | `load_addr`   | `0x3FCE3808` — DRAM (internal RAM, read-write data)    |
+| 4–7   | `BC 04 00 00` | `data_length` | `0x000004BC` = 1,212 bytes                             |
+
+**Key differences between the two images:**
+
+| Property         | `firmware.bin`     | `bootloader.bin`   |
+|------------------|--------------------|--------------------|
+| Segment count    | 6                  | 3                  |
+| Entry address    | `0x40377A88`       | `0x403C98D0`       |
+| First segment at | `0x3C100020` (DROM)| `0x3FCE3808` (DRAM)|
+| First seg size   | ~1.35 MB           | 1,212 bytes        |
+
+The bootloader is tiny (a handful of kilobytes in total) because its only job is to initialise hardware, read the partition table, and hand control to the application. The application image is much larger and is laid out across multiple segments covering read-only data, executable code, and initialised variables.
 
 ---
 
@@ -476,3 +566,149 @@ A practical difference: when you patch an STM32 binary, you do **not** need to r
 | XOR and Bitwise Operations | https://en.wikipedia.org/wiki/Bitwise_operation#XOR |
 | Little-endian vs Big-endian | https://en.wikipedia.org/wiki/Endianness |
 | CRC Algorithms (AVR/STM32 context) | https://en.wikipedia.org/wiki/Cyclic_redundancy_check |
+
+---
+
+## 9. The ESP32 Flash Map and Boot Sequence
+
+This section explains the four binary files that are flashed to an ESP32-S3, *why* each file lives at its specific flash address, what the chip does from the moment it powers on, whether the bootloader is compiled by PlatformIO, and what the seemingly mysterious `boot_app0.bin` file actually contains.
+
+### 9.1 Flash Memory Layout
+
+A freshly flashed ESP32-S3 with a typical PlatformIO / ESP-IDF project looks like this in SPI flash:
+
+```
+Flash address   File               Size (typical)  Purpose
+─────────────────────────────────────────────────────────────────────────────────
+0x00000         bootloader.bin     ~30 KB          Second-stage bootloader
+0x08000         partitions.bin     ~3 KB           Partition table
+0x0E000         boot_app0.bin      8 KB region     OTA data (boot-slot selector)
+0x10000         firmware.bin       up to ~2 MB     Your application
+```
+
+These addresses match exactly the `config.js` entries:
+
+```javascript
+{ path: 'MyDevice/Firmware/bootloader.bin', offset: 0x0000  },
+{ path: 'MyDevice/Firmware/partitions.bin', offset: 0x8000  },
+{ path: 'MyDevice/Firmware/boot_app0.bin',  offset: 0xe000  },
+{ path: 'MyDevice/Firmware/firmware.bin',   offset: 0x10000 }
+```
+
+### 9.2 The Boot Sequence — What Happens When the Chip Powers On
+
+The ESP32-S3 goes through three distinct stages before your application code runs:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Stage 1 — ROM Boot (First-Stage Bootloader)                         │
+│  Burned into the chip at manufacture; cannot be changed              │
+│  Lives in internal ROM at address 0x40000000 in the CPU's address    │
+│  space — NOT in SPI flash                                            │
+│                                                                      │
+│  Responsibilities:                                                   │
+│  • Initialise clocks and basic peripheral bus                        │
+│  • Check the BOOT pin: if held LOW → enter serial download mode      │
+│  • Read SPI flash address 0x0000 and load the second-stage           │
+│    bootloader into internal SRAM                                     │
+│  • Verify the bootloader's magic byte (0xE9) and XOR checksum        │
+│  • Jump to the bootloader's entry address                            │
+└──────────────────────────┬───────────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  Stage 2 — Second-Stage Bootloader  (flash 0x0000)                  │
+│  Compiled and linked with your project by ESP-IDF / PlatformIO       │
+│                                                                      │
+│  Responsibilities:                                                   │
+│  • Initialise SPI flash at full speed and capacity                   │
+│  • Read the partition table from flash address 0x8000                │
+│  • Read the OTA data partition from flash address 0xE000 to decide   │
+│    which application partition to boot                               │
+│  • Load the chosen application image into SRAM (segments that need   │
+│    to live in RAM), verify its XOR checksum and SHA-256 hash         │
+│  • Map flash-based segments (e.g., .rodata) into the CPU's virtual   │
+│    address space via the MMU cache                                   │
+│  • Jump to the application's entry_addr                              │
+└──────────────────────────┬───────────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  Stage 3 — Application  (flash 0x10000)                             │
+│  Your firmware.bin                                                   │
+│                                                                      │
+│  The CPU starts executing at entry_addr (0x40377A88 in the example  │
+│  above). The Arduino / ESP-IDF runtime initialises peripherals,      │
+│  mounts file systems, and eventually calls setup() and loop().       │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+> **Does the CPU start at address 0?**  
+> No. When the chip powers on, the program counter is set to the internal ROM's reset vector — a fixed address inside the chip, somewhere in the 0x4000xxxx range. Flash address 0x0000 is *where the bootloader binary is stored*, not the CPU's reset vector. The ROM code reads the bootloader from flash and copies it into RAM before jumping to it.
+
+### 9.3 bootloader.bin — The Second-Stage Bootloader
+
+**What it is:** A small executable image (typically 25–50 KB) produced by the ESP-IDF build system. It is a genuine ESP32 binary with a valid `0xE9` magic byte, segment headers, an XOR checksum, and (on ESP32-S3) a SHA-256 digest — exactly as described in section 2.
+
+**Why it lives at 0x0000:** The internal ROM bootloader (stage 1) is hard-wired to read from this address. It must be at the very beginning of flash. There is a 4 KB "secure boot" descriptor page reserved at 0x0000 on some configurations; on a plain (non-secure-boot) project the bootloader binary itself starts at byte 0.
+
+**Is it compiled by PlatformIO?**  
+Yes — the bootloader is compiled *from source* as part of your project. ESP-IDF contains the bootloader's C source code in `components/bootloader/`. When you build with PlatformIO, it compiles this source with your project's flash settings (mode, clock speed, flash size) baked in. That is why `bootloader.bin` is found in the build output folder (`.pio/build/<target>/bootloader.bin`) and not downloaded from the internet. If you change your flash configuration, you need to rebuild and re-flash the bootloader.
+
+### 9.4 partitions.bin — The Partition Table
+
+**What it is:** A compact binary description of how the SPI flash chip is divided into logical regions. Think of it as a simple disk-partition table (like a GPT or MBR on a PC hard drive), but for flash.
+
+**Why it lives at 0x8000:** This address is fixed by the ESP-IDF convention and is always where the second-stage bootloader looks for the partition table. The region from 0x0000 to 0x7FFF is reserved for the bootloader itself.
+
+**What it contains:** A sequence of 32-byte records, each describing one partition:
+
+```
+Name          Type  SubType  Offset    Size      Flags
+──────────────────────────────────────────────────────
+nvs           data  nvs      0x009000  0x005000
+otadata       data  ota      0x00E000  0x002000
+app0          app   ota_0    0x010000  0x200000
+app1          app   ota_1    0x210000  0x200000
+spiffs        data  spiffs   0x410000  0x1F0000
+```
+
+The bootloader reads this table to learn where each partition starts and how large it is. Without a valid partition table, the bootloader does not know where to find the application.
+
+### 9.5 boot_app0.bin — The OTA Data Partition
+
+**What it is:** A small *data* file (not an executable binary) that records which OTA application slot is currently active. This is the OTA data partition described in the partition table under `otadata`.
+
+**Why it lives at 0xE000:** Because the partition table entry for `otadata` points to 0xE000. This is the standard location chosen by ESP-IDF so that the bootloader can always find it quickly.
+
+**What the file actually contains:**
+
+```
+Offset  Hex bytes                               Field
+────────────────────────────────────────────────────────────────────────────
+0x00    01 00 00 00                             ota_seq  (uint32, LE) = 1
+0x04    FF FF FF FF FF FF FF FF                 seq_label (unused, 0xFF)
+0x0C    FF FF FF FF FF FF FF FF                 seq_label continued
+0x14    FF FF FF FF                             ota_state (0xFFFFFFFF = any)
+0x18    9A 98 43 47                             CRC32 of the above 28 bytes
+0x1C    (rest of 8 KB region filled with 0xFF)  erased flash
+```
+
+`ota_seq = 1` means: *boot from the OTA slot whose sequence number is 1*, which corresponds to `ota_0` — the first application partition at 0x10000. The CRC32 at the end (`9A 98 43 47`) protects the 28-byte record against corruption. Everything beyond the first 32 bytes is 0xFF (erased flash) because only the first record has been written.
+
+**Why it is not executable code:**  
+`boot_app0.bin` does **not** start with `0xE9`. It contains no machine instructions. The bootloader does not try to execute it; it reads it as plain data to learn the value of `ota_seq`. This is why a hex dump shows only a handful of meaningful bytes at the start followed by 0xFF padding — that is the correct and expected content of an OTA data partition on a device that has never performed an OTA update.
+
+> **Where does `boot_app0.bin` come from?**  
+> It is a static file distributed with the ESP-IDF framework, not compiled from your project's source code. PlatformIO installs it at  
+> `~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin`.  
+> Because it is always the same content (sequence = 1, all else 0xFF, CRC recalculated), it can safely be reused across projects.
+
+### 9.6 firmware.bin — The Application
+
+**What it is:** The compiled and linked application binary, containing all your code, libraries, and read-only data. It is a valid ESP32 image (magic byte `0xE9`, segments, XOR checksum, SHA-256 digest) as described throughout this document.
+
+**Why it lives at 0x10000:** The partition table's `ota_0` entry points to 0x10000. This is the ESP-IDF default and leaves the region from 0x0000 to 0x0FFFF (64 KB) for the bootloader, partition table, and OTA data — exactly the space occupied by the three files above.
+
+**Why the addresses matter:**  
+Each file *must* be flashed to exactly the right address. If `partitions.bin` is written to the wrong offset, the bootloader cannot find the partition table and will refuse to boot. If `firmware.bin` is written at 0x0000 instead of 0x10000, it overwrites the bootloader and the device will fail to start entirely. The addresses in `config.js` are not arbitrary — they match the hard-coded expectations of the ROM and the partition table.
