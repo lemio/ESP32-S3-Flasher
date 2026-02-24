@@ -92,21 +92,46 @@ if (binaryString.charCodeAt(0) !== 0xE9) {
 
 Bytes 8–23 form the **Extended Image Header** (16 bytes):
 
-| Byte | Field              | Meaning                                         |
-|------|--------------------|-------------------------------------------------|
-| 8–11 | `wp_pin`           | Write-protect pin config                        |
-| 12–14 | `spi_pin_drv`    | SPI pin drive settings                          |
-| 15–16 | `chip_id`        | Target chip identifier (e.g., `0x0009` = ESP32-S3) |
-| 17   | `min_chip_rev`     | Minimum chip revision required                  |
-| 18   | `min_chip_rev_full`| Full minimum chip revision                      |
-| 19   | `max_chip_rev_full`| Maximum chip revision                           |
-| 20–23 | `reserved`       | Reserved bytes (must be zero)                   |
+| Byte  | Field               | Meaning                                                        |
+|-------|---------------------|----------------------------------------------------------------|
+| 8     | `wp_pin`            | Write-protect pin config (1 byte)                              |
+| 9–11  | `spi_pin_drv`       | SPI pin drive settings (3 bytes)                               |
+| 12–13 | `chip_id`           | Target chip identifier (2 bytes, e.g., `0x0009` = ESP32-S3)   |
+| 14    | `min_chip_rev`      | Minimum chip revision required (legacy, 1 byte)                |
+| 15–16 | `min_chip_rev_full` | Minimum chip revision (2 bytes, major × 100 + minor)           |
+| 17–18 | `max_chip_rev_full` | Maximum chip revision (2 bytes, major × 100 + minor)           |
+| 19–22 | `reserved`          | Reserved bytes (must be zero, 4 bytes)                         |
+| 23    | `hash_appended`     | If `1`, a SHA-256 digest follows the XOR checksum (1 byte)     |
 
-Byte 18 (`min_chip_rev_full` / also used as `append_digest` indicator) tells us whether a SHA-256 digest has been appended to the image:
+<details>
+<summary>Known <code>chip_id</code> values (click to expand)</summary>
+
+| `chip_id` value | Chip        |
+|-----------------|-------------|
+| `0x0000`        | ESP32       |
+| `0x0002`        | ESP32-S2    |
+| `0x0005`        | ESP32-C3    |
+| `0x0009`        | ESP32-S3    |
+| `0x000C`        | ESP32-C2    |
+| `0x000D`        | ESP32-C6    |
+| `0x0010`        | ESP32-H2    |
+| `0x0012`        | ESP32-P4    |
+| `0x0014`        | ESP32-C61   |
+| `0x0017`        | ESP32-C5    |
+| `0x0019`        | ESP32-H21   |
+| `0x001C`        | ESP32-H4    |
+| `0x0020`        | ESP32-S31   |
+| `0xFFFF`        | Invalid     |
+
+> **Reference:** [`esp_chip_id_t` in ESP-IDF](https://github.com/espressif/esp-idf/blob/master/components/bootloader_support/include/esp_app_format.h)
+
+</details>
+
+Byte 23 (`hash_appended`) tells us whether a SHA-256 digest has been appended to the image:
 
 ```javascript
-// From index.html — read the append_digest flag from the extended header
-const appendDigest = binaryString.charCodeAt(18);
+// From index.html — read the hash_appended flag from the extended header
+const appendDigest = binaryString.charCodeAt(23);
 const hasSHA256 = binaryString.length >= 33 &&
                  binaryString.length % 16 === 0 &&
                  appendDigest !== 0x00;
@@ -235,11 +260,11 @@ The image has a SHA-256 digest appended if **all** of the following are true:
 
 1. The image length is a multiple of 16 bytes (the image is padded).
 2. The image length is at least 33 bytes.
-3. Byte 18 of the extended header (`append_digest`) is non-zero.
+3. Byte 23 of the extended header (`hash_appended`) is non-zero.
 
 ```javascript
 // From index.html — detect SHA-256 presence
-const appendDigest = binaryString.charCodeAt(18);
+const appendDigest = binaryString.charCodeAt(23);
 const hasSHA256 = binaryString.length >= 33 &&
                  binaryString.length % 16 === 0 &&
                  appendDigest !== 0x00;
@@ -316,8 +341,8 @@ const recalculateFirmwareIntegrity = async (binaryString) => {
     }
 
     // ── Step 2: Detect SHA-256 presence ──────────────────────────────────
-    // Byte 18 is the append_digest flag in the extended header.
-    const appendDigest = binaryString.charCodeAt(18);
+    // Byte 23 is the hash_appended flag in the extended header.
+    const appendDigest = binaryString.charCodeAt(23);
     const hasSHA256 = binaryString.length >= 33 &&
                      binaryString.length % 16 === 0 &&
                      appendDigest !== 0x00;
