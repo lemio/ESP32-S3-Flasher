@@ -554,7 +554,7 @@
                 return binaryString;
             }
 
-            const appendDigest = binaryString.charCodeAt(18);
+            const appendDigest = binaryString.charCodeAt(23);
             const hasSHA256 = binaryString.length >= 33 && 
                              binaryString.length % 16 === 0 && 
                              appendDigest !== 0x00;
