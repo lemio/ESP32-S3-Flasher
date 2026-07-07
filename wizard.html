@@ -313,6 +313,26 @@
             color: #9ca3af;
         }
 
+        .serial-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .serial-controls input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        }
+
+        .serial-controls input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
         .firmware-card {
             background: white;
             border: 1px solid #e5e7eb;
@@ -791,7 +811,14 @@
                     </ul>
                 </div>
 
-                <div class="console" id="consoleStep4"></div>
+                <div id="serialMonitorBlock" style="display: none;">
+                    <h4>Live Serial Output</h4>
+                    <div class="console" id="consoleStep4"></div>
+                    <div class="serial-controls">
+                        <input type="text" id="serialInput" placeholder="Type a message and press Enter to send to the device">
+                        <button class="btn-secondary" id="serialStopBtn">Stop Monitor</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -814,6 +841,7 @@
         let selectedFirmware = null;
         let chipInfo = {};
         let isDeviceConnected = false;
+        let serialMonitorActive = false;
 
         // Check URL parameter for password hiding
         const urlParams = new URLSearchParams(window.location.search);
@@ -831,6 +859,71 @@
         };
 
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        // ==================== SERIAL MONITOR ====================
+
+        // Reads raw (non-SLIP-framed) bytes straight from the same port used for
+        // flashing - transport.rawRead() bypasses esptool-js's SLIP packet parsing,
+        // which is only meant for talking to the ROM bootloader/stub. Assumes the
+        // firmware's Serial.begin() matches CONFIG.BAUD_RATE (115200, the standard
+        // Arduino default) - the port was already opened at that rate and is never
+        // changed since romBaudrate === baudrate in this tool's config. On boards
+        // where resetting causes a real USB re-enumeration (native USB-JTAG/Serial),
+        // `transport`/`device` may already be stale by the time this runs - rawRead()
+        // fails fast and is caught below rather than crashing the wizard.
+        const startSerialMonitor = async () => {
+            if (!transport?.device?.readable || serialMonitorActive) return;
+            serialMonitorActive = true;
+            document.getElementById('serialMonitorBlock').style.display = 'block';
+            const consoleEl = document.getElementById('consoleStep4');
+            consoleEl.textContent = '';
+            consoleEl.style.display = 'block';
+
+            if (!transport.reader) {
+                transport.reader = transport.device.readable?.getReader();
+            }
+
+            const decoder = new TextDecoder();
+            try {
+                for await (const chunk of transport.rawRead()) {
+                    consoleEl.textContent += decoder.decode(chunk, { stream: true });
+                    consoleEl.scrollTop = consoleEl.scrollHeight;
+                }
+            } catch (e) {
+                // Expected once stopSerialMonitor() cancels the reader, or the device disconnects.
+            } finally {
+                serialMonitorActive = false;
+            }
+        };
+
+        const stopSerialMonitor = async () => {
+            if (!serialMonitorActive) return;
+            try {
+                await transport?.reader?.cancel();
+                await transport?.waitForUnlock(50);
+            } catch (e) {
+                // Already closed/disconnected - nothing to clean up.
+            }
+            if (transport) transport.reader = undefined;
+        };
+
+        const sendSerialLine = async () => {
+            const input = document.getElementById('serialInput');
+            const text = input.value;
+            if (!text || !transport?.device?.writable) return;
+            const writer = transport.device.writable.getWriter();
+            try {
+                await writer.write(new TextEncoder().encode(text + '\n'));
+            } finally {
+                writer.releaseLock();
+            }
+            input.value = '';
+        };
+
+        document.getElementById('serialStopBtn').addEventListener('click', () => stopSerialMonitor());
+        document.getElementById('serialInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendSerialLine();
+        });
 
         const storage = {
             get: (key, defaultValue) => localStorage.getItem(`fw_var_${key}`) ?? defaultValue,
@@ -1244,8 +1337,12 @@
                 
                 await waitForDisconnect;
                 log('✓ Device reset detected', 3);
-                
-                
+
+                // Not awaited - runs an open-ended read loop until stopSerialMonitor()
+                // cancels it. Silently does nothing if the port went stale across a real
+                // USB re-enumeration (see startSerialMonitor()'s comment).
+                startSerialMonitor();
+
                 // Collect actual configuration values for replacement
                 const configValues = {};
                 if (config.variables?.length) {

@@ -195,6 +195,27 @@
             color: #9ca3af;
         }
 
+        .serial-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .serial-controls input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        }
+
+        .serial-controls input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
         .status {
             padding: 12px 16px;
             border-radius: 8px;
@@ -439,6 +460,19 @@
             <div class="progress-text" id="progressText">0%</div>
         </div>
 
+        <div class="section" id="serialMonitorSection" style="display: none;">
+            <div class="section-title">4. Serial Monitor</div>
+            <div class="console" id="serialMonitor"></div>
+            <div class="serial-controls">
+                <input type="text" id="serialInput" placeholder="Type a message and press Enter to send to the device">
+                <button id="serialStopBtn" class="btn-secondary">Stop Monitor</button>
+            </div>
+            <p class="info-text">
+                Starts automatically after flashing - shows whatever your firmware prints to Serial.
+                Stop it before flashing again or disconnecting.
+            </p>
+        </div>
+
         <div class="section">
             <div class="section-title">Console Output</div>
             <div class="console" id="console"></div>
@@ -455,6 +489,7 @@
         let device = null;
         let transport = null;
         let connected = false;
+        let serialMonitorActive = false;
 
         // ==================== DOM ELEMENTS ====================
         
@@ -467,7 +502,11 @@
             progressContainer: document.getElementById('progressContainer'),
             progressBar: document.getElementById('progressBar'),
             firmwareSelect: document.getElementById('firmwareSelect'),
-            variablesContainer: document.getElementById('variablesContainer')
+            variablesContainer: document.getElementById('variablesContainer'),
+            serialMonitorSection: document.getElementById('serialMonitorSection'),
+            serialMonitor: document.getElementById('serialMonitor'),
+            serialInput: document.getElementById('serialInput'),
+            serialStopBtn: document.getElementById('serialStopBtn')
         };
 
         // ==================== UTILITY FUNCTIONS ====================
@@ -734,14 +773,84 @@
             return firmware;
         };
 
+        // ==================== SERIAL MONITOR ====================
+
+        // Reads raw (non-SLIP-framed) bytes straight from the same port used for
+        // flashing - transport.rawRead() bypasses esptool-js's SLIP packet parsing,
+        // which is only meant for talking to the ROM bootloader/stub. This assumes the
+        // firmware's Serial.begin() matches CONFIG.BAUD_RATE (115200, the standard
+        // Arduino default) - the port was already opened at that rate for flashing and
+        // is never changed since romBaudrate === baudrate in this tool's config, so no
+        // reconnect is needed here.
+        const startSerialMonitor = async () => {
+            if (!transport || serialMonitorActive) return;
+            serialMonitorActive = true;
+            elements.serialMonitorSection.style.display = 'block';
+            elements.serialMonitor.textContent = '';
+
+            if (!transport.reader) {
+                transport.reader = transport.device.readable?.getReader();
+            }
+
+            const decoder = new TextDecoder();
+            try {
+                for await (const chunk of transport.rawRead()) {
+                    elements.serialMonitor.textContent += decoder.decode(chunk, { stream: true });
+                    elements.serialMonitor.scrollTop = elements.serialMonitor.scrollHeight;
+                }
+            } catch (e) {
+                // Expected once stopSerialMonitor() cancels the reader, or the device disconnects.
+            } finally {
+                serialMonitorActive = false;
+            }
+        };
+
+        const stopSerialMonitor = async () => {
+            if (!serialMonitorActive) return;
+            try {
+                await transport?.reader?.cancel();
+                // Same pattern esptool-js's own disconnect() uses: cancel() settling
+                // doesn't strictly guarantee the reader lock is released yet, so poll
+                // briefly before handing the port back to a fresh flash/monitor attempt.
+                await transport?.waitForUnlock(50);
+            } catch (e) {
+                // Already closed/disconnected - nothing to clean up.
+            }
+            // Cancelling doesn't clear this - a cancelled reader can't be read from
+            // again, so leaving it set would break the next flash's own read attempts.
+            // esptool-js's own disconnect() does the same reset after cancelling.
+            if (transport) transport.reader = undefined;
+        };
+
+        elements.serialStopBtn.addEventListener('click', () => stopSerialMonitor());
+
+        const sendSerialLine = async () => {
+            const text = elements.serialInput.value;
+            if (!text || !transport?.device?.writable) return;
+            const writer = transport.device.writable.getWriter();
+            try {
+                await writer.write(new TextEncoder().encode(text + '\n'));
+            } finally {
+                writer.releaseLock();
+            }
+            elements.serialInput.value = '';
+        };
+
+        elements.serialInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendSerialLine();
+        });
+
         // ==================== CONNECTION MANAGEMENT ====================
-        
+
         const disconnect = async () => {
+            await stopSerialMonitor();
+            elements.serialMonitorSection.style.display = 'none';
+
             // Remove disconnect listener to prevent duplicate handling
             if (device) {
                 navigator.serial.removeEventListener('disconnect', handleDisconnect);
             }
-            
+
             if (esploader) {
                 await esploader.disconnect();
                 await sleep(CONFIG.DISCONNECT_WAIT_MS);
@@ -798,7 +907,9 @@
                 elements.connectBtn.classList.remove('connected');
                 elements.flashBtn.disabled = true;
                 elements.progressContainer.style.display = 'none';
-                
+                elements.serialMonitorSection.style.display = 'none';
+                serialMonitorActive = false; // the port is already gone - rawRead()'s loop will throw and exit on its own
+
                 // Clean up
                 esploader = null;
                 transport = null;
@@ -880,6 +991,9 @@
                 showStatus('Please connect device first', 'warning');
                 return;
             }
+
+            // A running serial monitor holds the same reader flashing needs - stop it first.
+            await stopSerialMonitor();
 
             try {
                 elements.flashBtn.disabled = true;
@@ -970,10 +1084,14 @@
                 }
                 
                 await sleep(CONFIG.DISCONNECT_WAIT_MS);
-                
+
                 updateProgress(100);
                 log('Flash operation complete!', 'success');
                 showStatus('Flash successful! Device is now booting.', 'success');
+
+                // Not awaited - this runs an open-ended read loop until stopSerialMonitor()
+                // cancels it, so awaiting here would block forever instead of finishing this function.
+                startSerialMonitor();
 
             } catch (error) {
                 const errorMsg = error.message.toLowerCase();

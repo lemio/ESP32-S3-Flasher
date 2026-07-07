@@ -30,6 +30,9 @@ The index.html flow is intended for more experienced users; and also gives you s
 - 🔒 **Firmware integrity**: Automatic checksum and SHA256 recalculation
 - 📊 **Real-time progress**: Visual feedback during the flashing process
 - 🔐 **Secure**: All processing happens locally in your browser
+- 🖥️ **Built-in serial monitor**: Starts automatically once flashing finishes, showing
+  whatever your firmware prints to `Serial` - no separate tool needed, especially useful
+  for beginners confirming their firmware is actually doing what they expect
 
 ## Requirements
 
