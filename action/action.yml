@@ -1,0 +1,45 @@
+name: 'Build & Package PlatformIO Firmware for ESP32-S3-Flasher'
+description: >-
+  Builds every environment in a PlatformIO project (`pio run`), then packages the
+  compiled binaries plus this repo's browser-based flashing web app into a
+  self-contained, GitHub Pages-ready output folder. Add a flasher-manifest.yml at your
+  project root to give each environment a display name/description, and (optionally)
+  flash-time-patchable variables like a WiFi SSID/password - see this repo's README for
+  the placeholder-string convention.
+inputs:
+  project-dir:
+    description: 'Directory containing the platformio.ini to build (and flasher-manifest.yml, if any)'
+    required: false
+    default: '.'
+  output-dir:
+    description: 'Where to write the packaged site (binaries + manifest.json + web app)'
+    required: false
+    default: 'docs'
+  manifest-config:
+    description: 'Path (relative to project-dir) to the per-example metadata file'
+    required: false
+    default: 'flasher-manifest.yml'
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install PlatformIO and PyYAML
+      shell: bash
+      run: pip install platformio pyyaml
+
+    - name: Build all environments
+      shell: bash
+      working-directory: ${{ inputs.project-dir }}
+      run: pio run
+
+    - name: Package firmware and web app
+      shell: bash
+      run: |
+        python3 "${{ github.action_path }}/build_and_package.py" \
+          --project-dir "${{ inputs.project-dir }}" \
+          --output-dir "${{ inputs.project-dir }}/${{ inputs.output-dir }}" \
+          --manifest-config "${{ inputs.manifest-config }}"

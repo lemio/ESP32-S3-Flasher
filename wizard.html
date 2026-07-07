@@ -1369,8 +1369,22 @@
         });
 
         // ==================== INITIALIZATION ====================
-        
-        window.addEventListener('load', () => {
+
+        // Loads a manifest.json served alongside this page and merges its firmware
+        // entries into FIRMWARE_CONFIGS - see the matching function in index.html for
+        // the full explanation. A repo with no manifest.json behaves exactly as before.
+        const loadManifest = async () => {
+            try {
+                const response = await fetch('./manifest.json');
+                if (!response.ok) return;
+                const manifest = await response.json();
+                Object.assign(FIRMWARE_CONFIGS, manifest);
+            } catch (e) {
+                // No manifest.json here, or it didn't parse - not an error.
+            }
+        };
+
+        window.addEventListener('load', async () => {
             if (!('serial' in navigator)) {
                 log('❌ Web Serial API not supported', 1);
                 log('Please use Chrome, Edge, or Opera browser', 1);
@@ -1379,7 +1393,9 @@
                 log('✅ Web Serial API ready', 1);
                 log('Click "Connect Device" when your device is in boot mode', 1);
             }
-            
+
+            await loadManifest();
+
             renderFirmwareList();
             updateButtons();
         });

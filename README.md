@@ -137,7 +137,40 @@ Each firmware configuration has the following structure:
 This will result in this UI:
 <img width="481" height="208" alt="image" src="https://github.com/user-attachments/assets/8c104666-036a-4e3f-b586-23093ea244ac" />
 
-### Adding Your Own Firmware
+### For PlatformIO projects: automate it with the reusable Action
+
+Everything below this section - manually locating `boot_app0.bin`, copying files into a
+subdirectory, hand-writing a `config.js` entry - is exactly what
+[`action/`](action/action.yml) automates for any PlatformIO-based repo. Instead of
+maintaining firmware here by hand, your own repo can:
+
+1. Have a `platformio.ini` that builds one environment per firmware/example you want
+   flashable (see [esp32_ble_wedo](https://github.com/lemio/esp32_ble_wedo)'s root
+   `platformio.ini` for a working example - one environment per example sketch).
+2. Add a `flasher-manifest.yml` declaring each environment's display name, description,
+   and any flash-time-patchable variables (the WiFi SSID/password pattern above,
+   generalized).
+3. Call this Action from your own repo's workflow:
+   ```yaml
+   - uses: lemio/ESP32-S3-Flasher/action@main
+     with:
+       output-dir: docs   # or wherever your repo publishes GitHub Pages from
+   ```
+   This runs `pio run`, collects every environment's `bootloader.bin`/`partitions.bin`/
+   `firmware.bin` (plus a bundled `boot_app0.bin` - no more hunting for it in
+   `~/.platformio/packages/...`), and writes it all out alongside a `manifest.json` and
+   a copy of this repo's flashing UI (`index.html`, `wizard.html`, `config.js`) - a
+   complete, ready-to-publish GitHub Pages folder.
+4. Commit and push that output folder to your own repo (same-repo, default
+   `GITHUB_TOKEN`, no secrets needed) and enable GitHub Pages on it.
+
+The web app here (`index.html`/`wizard.html`) automatically `fetch()`es a
+`manifest.json` next to itself on page load and merges any firmwares it finds into
+`FIRMWARE_CONFIGS` alongside whatever's hardcoded in `config.js` - so a repo using the
+Action gets its own fully independent flasher page, with its own firmware list, without
+touching this repo's `config.js` at all.
+
+### Adding Your Own Firmware (manual / non-PlatformIO projects)
 
 1. **Prepare your firmware files:**
 
