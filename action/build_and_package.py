@@ -13,6 +13,7 @@ same whether called from the reusable Action or run locally to preview a build).
 Usage: build_and_package.py --project-dir . --output-dir docs
 """
 import argparse
+import configparser
 import json
 import shutil
 import sys
@@ -33,6 +34,26 @@ FLASH_OFFSETS = {
 WEBAPP_ASSETS = ["index.html", "wizard.html", "config.js", "boot_mode.webm", "reset_only.webm"]
 
 
+def read_boards(project_dir: Path) -> dict:
+    """Maps env name -> board id by reading platformio.ini directly (no `pio` CLI call
+    needed) - falls back to the base [env] section's board if a specific environment
+    doesn't set its own. interpolation=None since we only need literal string values;
+    PlatformIO's own `${env.foo}` syntax isn't ConfigParser's `%(foo)s` syntax, but
+    disabling interpolation avoids any edge cases with unusual ini content."""
+    ini_path = project_dir / "platformio.ini"
+    if not ini_path.is_file():
+        return {}
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read(ini_path)
+    default_board = parser.get("env", "board", fallback=None) if parser.has_section("env") else None
+    boards = {}
+    for section in parser.sections():
+        if section.startswith("env:"):
+            env_name = section[len("env:"):]
+            boards[env_name] = parser.get(section, "board", fallback=default_board)
+    return boards
+
+
 def build_manifest(project_dir: Path, manifest_config_path: Path) -> dict:
     config = {}
     if manifest_config_path.is_file():
@@ -42,6 +63,7 @@ def build_manifest(project_dir: Path, manifest_config_path: Path) -> dict:
     if not pio_build_dir.is_dir():
         sys.exit(f"No .pio/build directory found under {project_dir} - run `pio run` first")
 
+    boards = read_boards(project_dir)
     manifest = {}
     for env_dir in sorted(p for p in pio_build_dir.iterdir() if p.is_dir()):
         env_name = env_dir.name
@@ -64,6 +86,9 @@ def build_manifest(project_dir: Path, manifest_config_path: Path) -> dict:
             "description": entry_config.get("description", ""),
             "files": files,
         }
+        hardware = entry_config.get("hardware", boards.get(env_name))
+        if hardware:
+            entry["hardware"] = hardware
         if "variables" in entry_config:
             entry["variables"] = entry_config["variables"]
 
