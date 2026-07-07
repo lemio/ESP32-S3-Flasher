@@ -851,8 +851,10 @@
                 navigator.serial.removeEventListener('disconnect', handleDisconnect);
             }
 
-            if (esploader) {
-                await esploader.disconnect();
+            // ESPLoader itself has no disconnect() method in esptool-js (only
+            // Transport does) - calling esploader.disconnect() throws "not a function".
+            if (transport) {
+                await transport.disconnect();
                 await sleep(CONFIG.DISCONNECT_WAIT_MS);
             }
             connected = false;
@@ -864,13 +866,43 @@
             device = null;
         };
 
-        const connect = async () => {
-            log('Requesting device access...', 'info');
-            device = await navigator.serial.requestPort({ filters: CONFIG.FILTERS });
-            
-            console.log(device.getInfo());
-            transport = new Transport(device, true);
-            
+        // esptool-js's own UsbJtagSerialReset sequence (native-USB boards, PID 0x1001) -
+        // done explicitly on an already-open transport before re-syncing for a second
+        // flash. esploader.main()/connect() always call transport.connect() as their
+        // very first action (unconditionally reopening the port), so there's no way to
+        // pulse RTS/DTR *before* calling them without the port already being open - it
+        // has to happen on the *existing* connection, before closing it. Mirrors the
+        // same reasoning as the explicit exit-reset pulse used after flashing
+        // (esploader.after('hard_reset', ...) wasn't reliable there either, and there's
+        // no strong reason to trust its built-in entry-side reset any more on this
+        // same connection type).
+        const resetIntoBootloader = async (t) => {
+            await t.setRTS(false);
+            await t.setDTR(false);
+            await sleep(100);
+            await t.setDTR(true);
+            await t.setRTS(false);
+            await sleep(100);
+            await t.setRTS(true);
+            await t.setDTR(false);
+            await t.setRTS(true);
+            await sleep(100);
+            await t.setRTS(false);
+            await t.setDTR(false);
+            await sleep(100);
+        };
+
+        // Builds a completely fresh Transport + ESPLoader against the given device (no
+        // new permission prompt - the same SerialPort object can be reopened as many
+        // times as needed within one grant) and syncs with it. Used both for the
+        // initial connect and to re-sync before each subsequent flash - reusing the
+        // *same* ESPLoader instance across multiple main() calls left stale internal
+        // state (e.g. this.IS_STUB) that caused a real, confirmed failure: "Software
+        // loader is resident..." on a second flash, because the instance still thought
+        // a stub was already running from the first flash's sync. Fresh objects avoid
+        // that whole class of problem, not just the port-already-open issue.
+        const syncWithDevice = async (targetDevice, mode = 'default_reset') => {
+            transport = new Transport(targetDevice, true);
             esploader = new ESPLoader({
                 transport: transport,
                 baudrate: CONFIG.BAUD_RATE,
@@ -880,8 +912,15 @@
                     write: (data) => log(data)
                 }
             });
-            
-            await esploader.main();
+            await esploader.main(mode);
+        };
+
+        const connect = async () => {
+            log('Requesting device access...', 'info');
+            device = await navigator.serial.requestPort({ filters: CONFIG.FILTERS });
+
+            console.log(device.getInfo());
+            await syncWithDevice(device);
             const chipName = await esploader.chip.CHIP_NAME;
             
             log(`Connected to ${chipName}`, 'success');
@@ -1006,6 +1045,23 @@
                 log(`Flashing: ${config.name}`, 'info');
                 showStatus('Flashing firmware...', 'info');
 
+                // Re-sync with the bootloader before every flash, not just the first -
+                // after a previous flash + reset, the chip is running the application,
+                // not the bootloader, so the esploader/transport from the initial
+                // connect() are stale. Without this, writeFlash() fails with "No serial
+                // data received" since nothing is listening for esptool's protocol
+                // anymore. Order matters here: the reset pulse needs the port already
+                // open, so it runs on the *current* transport first, then the port is
+                // closed, then a fresh Transport/ESPLoader syncs against it with
+                // mode='no_reset' (skip main()'s own reset attempt - we just did one).
+                // Fresh objects avoid stale internal state (e.g. this.IS_STUB) that
+                // caused a different, confirmed failure - "Software loader is
+                // resident..." - from reusing the same ESPLoader instance.
+                log('Re-syncing with device...', 'info');
+                await resetIntoBootloader(transport);
+                await transport.disconnect();
+                await syncWithDevice(device, 'no_reset');
+
                 const fileArray = [];
                 let firmwareBin = null;
                 
@@ -1098,10 +1154,11 @@
                 
                 // Check for boot mode error during flashing (timeout is most common indicator)
                 if (errorMsg.includes("timeout") ||
-                    errorMsg.includes("doesn't look like an image file") || 
+                    errorMsg.includes("doesn't look like an image file") ||
                     errorMsg.includes("invalid head of packet") ||
                     errorMsg.includes("failed to write") ||
-                    errorMsg.includes("packet content transfer stopped")) {
+                    errorMsg.includes("packet content transfer stopped") ||
+                    errorMsg.includes("no serial data received")) {
                     
                     log('Flash failed: Device must be in boot mode BEFORE flashing!', 'error');
                     showStatus('Flash failed - Enter boot mode first!', 'error');
@@ -1137,20 +1194,42 @@
 
         // ==================== INITIALIZATION ====================
 
+        // Overrides this generic tool's own branding with a consuming repo's own -
+        // e.g. "Powered Up BLE Library Flasher" instead of "ESP32-S3 Web Flasher" -
+        // from manifest.json's site.title/site.subtitle (flasher-manifest.yml's
+        // top-level `site:` key). Anything not provided keeps this repo's own default.
+        const applySiteCustomization = (site) => {
+            if (!site) return;
+            if (site.title) {
+                document.title = site.title;
+                const h1 = document.querySelector('h1');
+                if (h1) h1.textContent = site.title;
+            }
+            if (site.subtitle) {
+                const subtitleEl = document.querySelector('.subtitle');
+                if (subtitleEl) subtitleEl.textContent = site.subtitle;
+            }
+        };
+
         // Loads a manifest.json served alongside this page (e.g. a PlatformIO repo's own
-        // GitHub Pages build output) and merges its firmware entries into FIRMWARE_CONFIGS,
-        // same shape as an entry hand-written in config.js. Lets any repo add firmwares to
-        // this same flasher UI without editing config.js - see the reusable build Action
-        // in this repo's action/ directory, which generates this file. A repo with no
-        // manifest.json (like this one, today) behaves exactly as before: fetch 404s, and
-        // config.js's hardcoded FIRMWARE_CONFIGS entries are all that's shown.
+        // GitHub Pages build output) - shape is {site: {...}, firmwares: {...}} - and
+        // merges its firmware entries into FIRMWARE_CONFIGS (same shape as an entry
+        // hand-written in config.js) plus applies any site-wide branding overrides. Lets
+        // any repo add firmwares to this same flasher UI, and rename it to match their
+        // own project, without editing config.js or this page directly - see the
+        // reusable build Action in this repo's action/ directory, which generates this
+        // file. A repo with no manifest.json (like this one, today) behaves exactly as
+        // before: fetch 404s, and config.js's hardcoded FIRMWARE_CONFIGS entries (if any)
+        // are all that's shown, with this tool's own default branding.
         const loadManifest = async () => {
             try {
                 const response = await fetch('./manifest.json');
                 if (!response.ok) return;
                 const manifest = await response.json();
-                Object.assign(FIRMWARE_CONFIGS, manifest);
-                log(`Loaded ${Object.keys(manifest).length} firmware(s) from manifest.json`, 'info');
+                applySiteCustomization(manifest.site);
+                const firmwares = manifest.firmwares || {};
+                Object.assign(FIRMWARE_CONFIGS, firmwares);
+                log(`Loaded ${Object.keys(firmwares).length} firmware(s) from manifest.json`, 'info');
             } catch (e) {
                 // No manifest.json here, or it didn't parse - not an error, just nothing to add.
             }
