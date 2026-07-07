@@ -1382,9 +1382,16 @@
                     });
                 }
                 
-                // Show expected behavior with actual values substituted
+                // Show expected behavior with actual values substituted. expectedBehavior
+                // is optional - manifest.json-sourced firmwares (built from a
+                // flasher-manifest.yml that doesn't declare one) don't have it, only
+                // `description` - fall back to that rather than crashing on .map()
+                // of undefined.
                 const expectedList = document.getElementById('expectedBehaviorList');
-                expectedList.innerHTML = config.expectedBehavior
+                const expectedBehavior = config.expectedBehavior?.length
+                    ? config.expectedBehavior
+                    : [config.description || 'Device is now running the new firmware.'];
+                expectedList.innerHTML = expectedBehavior
                     .map(item => {
                         let processedItem = item;
                         

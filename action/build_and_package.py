@@ -59,8 +59,10 @@ def read_boards(project_dir: Path) -> dict:
 
 # Per-firmware fields copied through verbatim from flasher-manifest.yml if present -
 # see that file's own comments, or README.md's manifest schema section, for what each
-# one does in the web app.
-OPTIONAL_ENTRY_FIELDS = ["bootModeVideo", "resetVideo"]
+# one does in the web app. expectedBehavior is wizard.html-only (step 4's bulleted "What
+# to Expect" list, with {variable} placeholders substituted with the values the user
+# entered) - falls back to a single-item list built from `description` if not set.
+OPTIONAL_ENTRY_FIELDS = ["bootModeVideo", "resetVideo", "expectedBehavior"]
 
 
 def build_manifest(project_dir: Path, manifest_config_path: Path) -> tuple[dict, dict]:

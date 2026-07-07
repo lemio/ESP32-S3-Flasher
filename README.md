@@ -128,9 +128,9 @@ Each firmware configuration has the following structure:
     name: 'Human-readable name',
     description: 'Brief description (wizard only)',
     hardware: 'ESP32-S3-DevKitC-1',  // Board/chip this targets - shown in the UI so users know what to flash it to
-    expectedBehavior: [              // Array of expected behaviors (wizard only)
-        'What happens after flashing',
-        'Can include HTML like <b>bold</b> or <a href="...">links</a>'
+    expectedBehavior: [              // Optional (wizard only) - array of expected behaviors, shown as a
+        'What happens after flashing', // bulleted list in step 4. Falls back to a single item built from
+        'Can include HTML like <b>bold</b> or <a href="...">links</a>' // `description` above if omitted.
     ],
     files: [                         // Firmware files to flash
         { path: 'path/to/bootloader.bin', offset: 0x0000 },
