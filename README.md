@@ -6,6 +6,14 @@ https://github.com/user-attachments/assets/0cbbe652-9fc3-4732-ac1d-91ecdca1defe
 
 A simple, browser-based tool for flashing ESP32-S3 devices using the Web Serial API. Built with the ESPtool-js library made by [Esperessif](https://github.com/espressif/esptool-js). Next to flashing it can also alter the firmware by replacing *magic* keywords with other content; this could be usefull for wifi setup or other settings that you want end-users to change.
 
+**This is a generic tool, not tied to any one project** - no firmware ships with this
+repo. Point it at your own project's `manifest.json` (any PlatformIO-based repo can
+generate one automatically, no manual `config.js` editing) or add entries to `config.js`
+by hand. See [For PlatformIO projects: automate it with the reusable Action](#for-platformio-projects-automate-it-with-the-reusable-action)
+for the fastest path if you're already using PlatformIO - a real example:
+[esp32_PoweredUp](https://github.com/lemio/esp32_PoweredUp), whose own GitHub Pages site
+is built entirely by this tool's reusable Action.
+
 ## The User Interface
 
 This project contains two different types of interface one is the index.html the other is wizard.html. wizard.html is intended for beginners and people that normally don't deal with terminals, firmware etc. You can replace the short videos with your own product.
@@ -42,9 +50,11 @@ The index.html flow is intended for more experienced users; and also gives you s
 
 ## Available Firmware
 
-- **Amoled T-Display - Factory Firmware**: Factory firmware for the LilyGo Amoled T-Display board
-- **Amoled T-Display - Screencast**: Screencast firmware with configurable WiFi credentials
-  - Variables: WiFi SSID, WiFi Password, mDNS Hostname
+None built in - `config.js`'s `FIRMWARE_CONFIGS` starts empty. Either point this tool at
+a `manifest.json` your own project generates (see
+[For PlatformIO projects](#for-platformio-projects-automate-it-with-the-reusable-action)
+below), or add entries to `config.js` directly (see
+[Adding Your Own Firmware](#adding-your-own-firmware-manual--non-platformio-projects)).
 
 ## How It Works
 
@@ -112,6 +122,7 @@ Each firmware configuration has the following structure:
 'firmware-key': {
     name: 'Human-readable name',
     description: 'Brief description (wizard only)',
+    hardware: 'ESP32-S3-DevKitC-1',  // Board/chip this targets - shown in the UI so users know what to flash it to
     expectedBehavior: [              // Array of expected behaviors (wizard only)
         'What happens after flashing',
         'Can include HTML like <b>bold</b> or <a href="...">links</a>'
@@ -310,4 +321,12 @@ open http://localhost:8080
 - Make sure you've entered values in the configuration fields
 - Check that the firmware supports variable replacement (look for the "Variables" section)
 - Verify the console output shows "Replacing variables in firmware..."
+
+**Device doesn't reboot into the new firmware after flashing?**
+- Both `index.html` and `wizard.html` try an automatic reset once flashing finishes -
+  if it doesn't take (some board/browser combinations still need it), just press the
+  device's physical RESET button. Boards connected via their native USB-JTAG/Serial
+  port (rather than an external USB-UART bridge chip) need a different reset sequence
+  than boards connected the classic way, which is why this could fail silently on some
+  boards even though flashing itself succeeded.
 
