@@ -1007,8 +1007,27 @@
         });
 
         // ==================== INITIALIZATION ====================
-        
-        window.addEventListener('load', () => {
+
+        // Loads a manifest.json served alongside this page (e.g. a PlatformIO repo's own
+        // GitHub Pages build output) and merges its firmware entries into FIRMWARE_CONFIGS,
+        // same shape as an entry hand-written in config.js. Lets any repo add firmwares to
+        // this same flasher UI without editing config.js - see the reusable build Action
+        // in this repo's action/ directory, which generates this file. A repo with no
+        // manifest.json (like this one, today) behaves exactly as before: fetch 404s, and
+        // config.js's hardcoded FIRMWARE_CONFIGS entries are all that's shown.
+        const loadManifest = async () => {
+            try {
+                const response = await fetch('./manifest.json');
+                if (!response.ok) return;
+                const manifest = await response.json();
+                Object.assign(FIRMWARE_CONFIGS, manifest);
+                log(`Loaded ${Object.keys(manifest).length} firmware(s) from manifest.json`, 'info');
+            } catch (e) {
+                // No manifest.json here, or it didn't parse - not an error, just nothing to add.
+            }
+        };
+
+        window.addEventListener('load', async () => {
             if (!('serial' in navigator)) {
                 showStatus('Web Serial API not supported. Use Chrome, Edge, or Opera.', 'error');
                 elements.connectBtn.disabled = true;
@@ -1016,7 +1035,9 @@
             } else {
                 log('Web Serial API ready', 'success');
             }
-            
+
+            await loadManifest();
+
             // Populate firmware dropdown from config
             populateFirmwareSelect();
             
