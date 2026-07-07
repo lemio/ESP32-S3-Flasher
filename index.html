@@ -948,17 +948,22 @@
                 updateProgress(90);
                 log('Flash complete! Resetting device...', 'success');
                 
-                // ESP32-S3 needs special handling to exit boot mode and run the app.
-                // usingUsbOtg must be true for boards connected via their native
-                // USB-JTAG/Serial peripheral (PID 0x1001, e.g. the ESP32-S3's built-in
-                // USB port) - esptool-js's hard_reset otherwise only pulses RTS with a
-                // shorter delay, which isn't enough to actually reset this connection
-                // type (this is also why PlatformIO's own upload can hard-reset
-                // reliably but this tool previously couldn't: it never passed this flag).
+                // esptool-js's esploader.after('hard_reset', ...) only ever *releases*
+                // RTS - it assumes RTS is already asserted from an earlier step and is
+                // a no-op if that assumption doesn't hold, which is exactly what we saw
+                // in practice: it logs success but the device stays in bootloader mode
+                // until a manual power cycle. Pulse RTS explicitly ourselves instead -
+                // assert (reset), wait, release - the same sequence confirmed working by
+                // other web flashers (e.g. https://github.com/thelastoutpostworkshop/ESPConnect).
+                // Transport.setRTS() already re-sends DTR internally on every call (a
+                // Windows usbser.sys driver workaround ported from esptool.py), so no
+                // extra DTR handling is needed here.
                 try {
                     log('Exiting download mode...', 'info');
-                    const usingUsbOtg = transport.getPid() === esploader.USB_JTAG_SERIAL_PID;
-                    await esploader.after('hard_reset', usingUsbOtg);
+                    await transport.setRTS(true);
+                    await sleep(100);
+                    await transport.setRTS(false);
+                    await sleep(1000); // let the chip actually finish booting
                     log('Device should now boot into application', 'success');
                     } catch (e) {
                     log('Could not automatically reset - please press RESET button on device', 'warning');

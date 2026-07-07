@@ -323,10 +323,13 @@ open http://localhost:8080
 - Verify the console output shows "Replacing variables in firmware..."
 
 **Device doesn't reboot into the new firmware after flashing?**
-- Both `index.html` and `wizard.html` try an automatic reset once flashing finishes -
-  if it doesn't take (some board/browser combinations still need it), just press the
-  device's physical RESET button. Boards connected via their native USB-JTAG/Serial
-  port (rather than an external USB-UART bridge chip) need a different reset sequence
-  than boards connected the classic way, which is why this could fail silently on some
-  boards even though flashing itself succeeded.
+- Both `index.html` and `wizard.html` try an automatic reset once flashing finishes, by
+  pulsing the RTS line directly (assert, wait, release) via `Transport.setRTS()`. This
+  is deliberately *not* `esploader.after('hard_reset', ...)` from esptool-js - that
+  method only ever *releases* RTS, assuming it's already asserted from an earlier step;
+  in practice that assumption doesn't always hold, and it reports success while the
+  device stays in bootloader mode until a manual power cycle. The explicit pulse
+  sequence here matches what's confirmed working by other web flashers (e.g.
+  [ESPConnect](https://github.com/thelastoutpostworkshop/ESPConnect)). If it still
+  doesn't take on some board/browser combination, just press the physical RESET button.
 

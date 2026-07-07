@@ -1201,15 +1201,20 @@
                 log('✅ Flash complete!', 3);
                 document.getElementById('flashStatus').textContent = 'Flash complete! Resetting device...';
 
-                // Try to reset automatically first - usingUsbOtg must be true for
-                // boards connected via their native USB-JTAG/Serial peripheral (PID
-                // 0x1001, e.g. the ESP32-S3's built-in USB port), or esptool-js's
-                // hard_reset won't actually toggle the right sequence. If this doesn't
-                // trigger a disconnect (some boards/browsers still need a physical
-                // press), the instructions below still work as a fallback.
+                // Try to reset automatically first. esptool-js's esploader.after()
+                // only ever *releases* RTS - it assumes RTS is already asserted and is
+                // a no-op if that assumption doesn't hold (confirmed in practice: it
+                // reports success but the device stays in bootloader mode). Pulse RTS
+                // explicitly instead - assert, wait, release - the same sequence
+                // confirmed working by other web flashers (e.g.
+                // https://github.com/thelastoutpostworkshop/ESPConnect). If this
+                // doesn't trigger a disconnect (some boards/browsers still need a
+                // physical press), the instructions below still work as a fallback.
                 try {
-                    const usingUsbOtg = transport.getPid() === esploader.USB_JTAG_SERIAL_PID;
-                    await esploader.after('hard_reset', usingUsbOtg);
+                    await transport.setRTS(true);
+                    await sleep(100);
+                    await transport.setRTS(false);
+                    await sleep(1000);
                     log('✓ Sent automatic reset', 3);
                 } catch (e) {
                     log('Automatic reset failed - press RESET manually', 2);
