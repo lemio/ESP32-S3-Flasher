@@ -147,8 +147,10 @@ Each firmware configuration has the following structure:
             postfix: '.local'                 // Optional: append to display
         }
     ],
-    resetVideo: 'https://.../my-reset-instructions.webm' // Optional (wizard.html only): overrides the
-                                                            // step-3 "press RESET" video for this firmware
+    resetVideo: 'https://.../my-reset-instructions.webm', // Optional (wizard.html only): overrides the
+                                                             // step-3 "press RESET" video for this firmware
+    sourceUrl: 'https://github.com/you/your-repo/tree/main/examples/foo' // Optional: "View source"
+                                                                           // link on the firmware card/info panel
 }
 ```
 

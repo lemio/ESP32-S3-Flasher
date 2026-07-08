@@ -62,7 +62,9 @@ def read_boards(project_dir: Path) -> dict:
 # one does in the web app. expectedBehavior is wizard.html-only (step 4's bulleted "What
 # to Expect" list, with {variable} placeholders substituted with the values the user
 # entered) - falls back to a single-item list built from `description` if not set.
-OPTIONAL_ENTRY_FIELDS = ["bootModeVideo", "resetVideo", "expectedBehavior"]
+# sourceUrl is an optional link (e.g. to the example's source or README on GitHub) shown
+# on its firmware card/info panel, for users who want to see what they're about to flash.
+OPTIONAL_ENTRY_FIELDS = ["bootModeVideo", "resetVideo", "expectedBehavior", "sourceUrl"]
 
 
 def build_manifest(project_dir: Path, manifest_config_path: Path) -> tuple[dict, dict]:

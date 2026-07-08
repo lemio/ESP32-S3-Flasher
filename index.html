@@ -195,6 +195,20 @@
             color: #9ca3af;
         }
 
+        .serial-monitor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 12px;
+        }
+
+        .serial-monitor-header .btn-secondary {
+            flex-shrink: 0;
+            padding: 6px 14px;
+            font-size: 0.85em;
+        }
+
         .serial-controls {
             display: flex;
             gap: 8px;
@@ -375,7 +389,7 @@
 
         .button-group {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             gap: 12px;
         }
 
@@ -449,11 +463,9 @@
             <div class="section-title">3. Flash or Download Firmware</div>
             <div class="button-group">
                 <button id="downloadBtn" class="btn-secondary" disabled>Download Modified Firmware</button>
+                <button id="downloadOriginalBtn" class="btn-secondary" disabled>Download Original Firmware</button>
                 <button id="flashBtn" disabled>Flash Device</button>
             </div>
-            <p class="info-text">
-                Tip: Download first to verify your configuration before flashing
-            </p>
             <div class="progress-container" id="progressContainer">
                 <div class="progress-bar" id="progressBar"></div>
             </div>
@@ -461,15 +473,17 @@
         </div>
 
         <div class="section" id="serialMonitorSection" style="display: none;">
-            <div class="section-title">4. Serial Monitor</div>
+            <div class="serial-monitor-header">
+                <div class="section-title" style="margin: 0;">4. Serial Monitor</div>
+                <button id="serialToggleBtn" class="btn-secondary">Stop Monitor</button>
+            </div>
             <div class="console" id="serialMonitor"></div>
             <div class="serial-controls">
                 <input type="text" id="serialInput" placeholder="Type a message and press Enter to send to the device">
-                <button id="serialStopBtn" class="btn-secondary">Stop Monitor</button>
+                <button id="serialSendBtn" class="btn-secondary">Send</button>
             </div>
             <p class="info-text">
                 Starts automatically after flashing - shows whatever your firmware prints to Serial.
-                Stop it before flashing again or disconnecting.
             </p>
         </div>
 
@@ -497,6 +511,7 @@
             connectBtn: document.getElementById('connectBtn'),
             flashBtn: document.getElementById('flashBtn'),
             downloadBtn: document.getElementById('downloadBtn'),
+            downloadOriginalBtn: document.getElementById('downloadOriginalBtn'),
             console: document.getElementById('console'),
             status: document.getElementById('status'),
             progressContainer: document.getElementById('progressContainer'),
@@ -506,7 +521,8 @@
             serialMonitorSection: document.getElementById('serialMonitorSection'),
             serialMonitor: document.getElementById('serialMonitor'),
             serialInput: document.getElementById('serialInput'),
-            serialStopBtn: document.getElementById('serialStopBtn')
+            serialToggleBtn: document.getElementById('serialToggleBtn'),
+            serialSendBtn: document.getElementById('serialSendBtn')
         };
 
         // ==================== UTILITY FUNCTIONS ====================
@@ -741,10 +757,11 @@
             document.querySelector('.firmware-info').innerHTML = `
                 <strong>Selected:</strong> ${config.name}<br>
                 <strong>Files:</strong> ${files}<br>
-                <strong>Chip:</strong> ${CONFIG.CHIP_NAME}${config.hardware ? `<br><strong>Board:</strong> ${config.hardware}` : ''}
+                <strong>Chip:</strong> ${CONFIG.CHIP_NAME}${config.hardware ? `<br><strong>Board:</strong> ${config.hardware}` : ''}${config.sourceUrl ? `<br><a href="${config.sourceUrl}" target="_blank" rel="noopener noreferrer">View source ↗</a>` : ''}
             `;
             renderVariables(config);
             elements.downloadBtn.disabled = !config.variables?.length;
+            elements.downloadOriginalBtn.disabled = false;
         };
 
         // ==================== FIRMWARE OPERATIONS ====================
@@ -775,6 +792,32 @@
 
         // ==================== SERIAL MONITOR ====================
 
+        // Keeps both DOM node count and memory bounded - without this, a device stuck
+        // in a boot loop spamming the same message can grow the console without limit
+        // and freeze the tab.
+        const MAX_SERIAL_CHARS = 200000;
+        let serialCharCount = 0;
+
+        // appendChild(textNode) instead of `el.textContent += text`: the latter
+        // destroys and recreates the *entire* text content on every single chunk,
+        // which silently clears any text the user has selected (confirmed - this is
+        // exactly why selecting output was impossible while data kept arriving).
+        // Appending a new node leaves existing nodes - and any selection anchored in
+        // them - alone.
+        const appendSerialText = (el, text) => {
+            el.appendChild(document.createTextNode(text));
+            serialCharCount += text.length;
+            while (serialCharCount > MAX_SERIAL_CHARS && el.firstChild) {
+                serialCharCount -= el.firstChild.textContent.length;
+                el.removeChild(el.firstChild);
+            }
+            // Only auto-scroll if already near the bottom - otherwise this fights
+            // anyone trying to read or select output further up.
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) {
+                el.scrollTop = el.scrollHeight;
+            }
+        };
+
         // Reads raw (non-SLIP-framed) bytes straight from the same port used for
         // flashing - transport.rawRead() bypasses esptool-js's SLIP packet parsing,
         // which is only meant for talking to the ROM bootloader/stub. This assumes the
@@ -787,6 +830,8 @@
             serialMonitorActive = true;
             elements.serialMonitorSection.style.display = 'block';
             elements.serialMonitor.textContent = '';
+            serialCharCount = 0;
+            elements.serialToggleBtn.textContent = 'Stop Monitor';
 
             if (!transport.reader) {
                 transport.reader = transport.device.readable?.getReader();
@@ -795,13 +840,13 @@
             const decoder = new TextDecoder();
             try {
                 for await (const chunk of transport.rawRead()) {
-                    elements.serialMonitor.textContent += decoder.decode(chunk, { stream: true });
-                    elements.serialMonitor.scrollTop = elements.serialMonitor.scrollHeight;
+                    appendSerialText(elements.serialMonitor, decoder.decode(chunk, { stream: true }));
                 }
             } catch (e) {
                 // Expected once stopSerialMonitor() cancels the reader, or the device disconnects.
             } finally {
                 serialMonitorActive = false;
+                elements.serialToggleBtn.textContent = 'Start Monitor';
             }
         };
 
@@ -822,7 +867,16 @@
             if (transport) transport.reader = undefined;
         };
 
-        elements.serialStopBtn.addEventListener('click', () => stopSerialMonitor());
+        // Single toggle button instead of a lone "Stop" button with no way back -
+        // clicking it again while stopped restarts the monitor (reopens a reader on
+        // the same still-open port, same as the automatic first start).
+        elements.serialToggleBtn.addEventListener('click', () => {
+            if (serialMonitorActive) {
+                stopSerialMonitor();
+            } else {
+                startSerialMonitor(); // not awaited - open-ended loop, see its own comment
+            }
+        });
 
         const sendSerialLine = async () => {
             const text = elements.serialInput.value;
@@ -836,6 +890,7 @@
             elements.serialInput.value = '';
         };
 
+        elements.serialSendBtn.addEventListener('click', () => sendSerialLine());
         elements.serialInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') sendSerialLine();
         });
@@ -1022,6 +1077,38 @@
                 showStatus(`Error: ${error.message}`, 'error');
             } finally {
                 elements.downloadBtn.disabled = false;
+            }
+        });
+
+        elements.downloadOriginalBtn.addEventListener('click', async () => {
+            try {
+                elements.downloadOriginalBtn.disabled = true;
+                log('Preparing original firmware download...', 'info');
+                showStatus('Preparing firmware...', 'info');
+
+                const config = FIRMWARE_CONFIGS[elements.firmwareSelect.value];
+                const firmwareFile = config.files.find(f => f.path.endsWith('firmware.bin'));
+                if (!firmwareFile) throw new Error('firmware.bin not found');
+
+                log(`Loading ${firmwareFile.path}...`, 'info');
+                const firmware = await loadFirmware(firmwareFile.path); // no variable substitution
+                const bytes = binaryUtils.stringToArrayBuffer(firmware);
+                const blob = new Blob([bytes], { type: 'application/octet-stream' });
+
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'firmware.bin';
+                link.click();
+                URL.revokeObjectURL(url);
+
+                log(`Firmware downloaded (${bytes.length} bytes)`, 'success');
+                showStatus('Download complete!', 'success');
+            } catch (error) {
+                log(`Download failed: ${error.message}`, 'error');
+                showStatus(`Error: ${error.message}`, 'error');
+            } finally {
+                elements.downloadOriginalBtn.disabled = false;
             }
         });
 
