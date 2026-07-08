@@ -42,8 +42,8 @@ The index.html flow is intended for more experienced users; and also gives you s
   - Google Chrome (version 89+)
   - Microsoft Edge (version 89+)
   - Opera (version 75+)
-- ESP32-S3 device connected via USB
-- Device must be in download mode
+- ESP32-S3 device connected via USB (only needs to be in download mode once you click
+  Flash Device - connecting doesn't touch its boot state)
 
 ## Usage
 
@@ -349,17 +349,17 @@ open http://localhost:8080
 **Device not detected?**
 - Make sure your device is connected via USB
 - Try a different USB cable
-- Ensure the device is in download mode (hold BOOT button while pressing RESET)
 - Make sure that the vendor id of the device is added to the filter. To show the vendor ID of a device; open the console in the brower and paste `navigator.serial.requestPort().then(x => console.log(x,x.getInfo()))` this will give you the device and vendor ID of your device.
 
 **Flash fails?**
 - Try disconnecting and reconnecting
 - Check the console output for detailed error messages
 - Ensure the firmware files are accessible
-- Flashing a second time without reconnecting? `index.html` re-syncs with the bootloader
-  before every flash attempt automatically - if it still fails with "No serial data
-  received", the device didn't respond to the automatic reset-into-bootloader attempt;
-  put it in boot mode manually (hold BOOT, press RESET, release both) and try again
+- `index.html`'s Connect button just opens the port - it doesn't touch the device's boot
+  state. Flash Device is what pulses it into bootloader mode and syncs, every time (not
+  just the first) - if that fails with "No serial data received", the device didn't
+  respond to the automatic reset-into-bootloader attempt; put it in boot mode manually
+  (hold BOOT, press RESET, release both) and try again
 
 **Variables not being replaced?**
 - Make sure you've entered values in the configuration fields

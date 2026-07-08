@@ -455,7 +455,8 @@
             <div class="section-title">2. Connect Device</div>
             <button id="connectBtn">Connect to ESP32-S3</button>
             <p class="info-text">
-                Make sure your device is connected via USB and in download mode
+                Make sure your device is connected via USB. It doesn't need to be in
+                download mode yet - that only happens once you click Flash Device.
             </p>
         </div>
 
@@ -973,14 +974,20 @@
         const connect = async () => {
             log('Requesting device access...', 'info');
             device = await navigator.serial.requestPort({ filters: CONFIG.FILTERS });
-
             console.log(device.getInfo());
-            await syncWithDevice(device);
-            const chipName = await esploader.chip.CHIP_NAME;
-            
-            log(`Connected to ${chipName}`, 'success');
-            showStatus(`Connected to ${chipName} - Ready!`, 'success');
-            
+
+            // Deliberately just opens the port - no sync, no reset-into-bootloader.
+            // esptool-js's main()/connect() always pulse the device into download mode
+            // as part of syncing, which used to happen right here on every Connect
+            // click even if the device was mid-way through running its own firmware.
+            // Only Flash Device (below) actually needs bootloader mode, so that's the
+            // only place that's still true.
+            transport = new Transport(device, true);
+            await transport.connect(CONFIG.BAUD_RATE, {});
+
+            log('Device connected - click Flash Device to begin', 'success');
+            showStatus('Device connected - click Flash Device when ready', 'success');
+
             connected = true;
             elements.connectBtn.textContent = 'Disconnect';
             elements.connectBtn.classList.add('connected');
@@ -1132,22 +1139,21 @@
                 log(`Flashing: ${config.name}`, 'info');
                 showStatus('Flashing firmware...', 'info');
 
-                // Re-sync with the bootloader before every flash, not just the first -
-                // after a previous flash + reset, the chip is running the application,
-                // not the bootloader, so the esploader/transport from the initial
-                // connect() are stale. Without this, writeFlash() fails with "No serial
-                // data received" since nothing is listening for esptool's protocol
-                // anymore. Order matters here: the reset pulse needs the port already
-                // open, so it runs on the *current* transport first, then the port is
-                // closed, then a fresh Transport/ESPLoader syncs against it with
-                // mode='no_reset' (skip main()'s own reset attempt - we just did one).
-                // Fresh objects avoid stale internal state (e.g. this.IS_STUB) that
-                // caused a different, confirmed failure - "Software loader is
-                // resident..." - from reusing the same ESPLoader instance.
-                log('Re-syncing with device...', 'info');
+                // Enter bootloader mode and sync - connect() deliberately doesn't do
+                // this (see its own comment), so this is the only place it happens,
+                // uniformly for the first flash and every one after. Order matters:
+                // the reset pulse needs the port already open, so it runs on the
+                // *current* transport first, then the port is closed, then a fresh
+                // Transport/ESPLoader syncs against it with mode='no_reset' (skip
+                // main()'s own reset attempt - we just did one). Fresh objects avoid
+                // stale internal state (e.g. this.IS_STUB) that caused a different,
+                // confirmed failure - "Software loader is resident..." - from reusing
+                // the same ESPLoader instance across more than one flash.
+                log('Entering bootloader mode...', 'info');
                 await resetIntoBootloader(transport);
                 await transport.disconnect();
                 await syncWithDevice(device, 'no_reset');
+                log(`Connected to ${esploader.chip.CHIP_NAME}`, 'success');
 
                 const fileArray = [];
                 let firmwareBin = null;
