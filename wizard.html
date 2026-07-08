@@ -329,7 +329,13 @@
             gap: 12px;
         }
 
-        .serial-monitor-header .btn-secondary {
+        .serial-monitor-header h4 {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .serial-monitor-header .btn-secondary,
+        .serial-controls button {
             flex-shrink: 0;
             padding: 6px 14px;
             font-size: 0.8em;
@@ -337,11 +343,13 @@
 
         .serial-controls {
             display: flex;
+            align-items: center;
             gap: 8px;
         }
 
         .serial-controls input {
             flex: 1;
+            min-width: 0;
             padding: 10px 12px;
             border: 1px solid #e5e7eb;
             border-radius: 6px;
