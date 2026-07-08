@@ -312,6 +312,12 @@
             margin: 16px 0;
             line-height: 1.5;
             border: 1px solid #f0f0f0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        #consoleStep4 {
+            max-height: 240px;
         }
 
         .console:empty::before {
@@ -818,7 +824,7 @@
                     </ul>
                 </div>
 
-                <div id="serialMonitorBlock" style="display: none;">
+                <div id="serialMonitorBlock" class="expected-result" style="display: none;">
                     <h4>Live Serial Output</h4>
                     <div class="console" id="consoleStep4"></div>
                     <div class="serial-controls">
