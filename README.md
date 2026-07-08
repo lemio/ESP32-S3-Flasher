@@ -30,6 +30,11 @@ The index.html flow is intended for more experienced users; and also gives you s
 - 🔒 **Firmware integrity**: Automatic checksum and SHA256 recalculation
 - 📊 **Real-time progress**: Visual feedback during the flashing process
 - 🔐 **Secure**: All processing happens locally in your browser
+- 🖥️ **Built-in serial monitor**: Starts automatically once flashing finishes, showing
+  whatever your firmware prints to `Serial` - no separate tool needed, especially useful
+  for beginners confirming their firmware is actually doing what they expect
+- 🎨 **Rebrandable**: a `manifest.json`'s `site` block renames the tool and swaps its
+  instructional videos for ones specific to your project - no forking required
 
 ## Requirements
 
@@ -37,8 +42,8 @@ The index.html flow is intended for more experienced users; and also gives you s
   - Google Chrome (version 89+)
   - Microsoft Edge (version 89+)
   - Opera (version 75+)
-- ESP32-S3 device connected via USB
-- Device must be in download mode
+- ESP32-S3 device connected via USB (only needs to be in download mode once you click
+  Flash Device - connecting doesn't touch its boot state)
 
 ## Usage
 
@@ -123,9 +128,9 @@ Each firmware configuration has the following structure:
     name: 'Human-readable name',
     description: 'Brief description (wizard only)',
     hardware: 'ESP32-S3-DevKitC-1',  // Board/chip this targets - shown in the UI so users know what to flash it to
-    expectedBehavior: [              // Array of expected behaviors (wizard only)
-        'What happens after flashing',
-        'Can include HTML like <b>bold</b> or <a href="...">links</a>'
+    expectedBehavior: [              // Optional (wizard only) - array of expected behaviors, shown as a
+        'What happens after flashing', // bulleted list in step 4. Falls back to a single item built from
+        'Can include HTML like <b>bold</b> or <a href="...">links</a>' // `description` above if omitted.
     ],
     files: [                         // Firmware files to flash
         { path: 'path/to/bootloader.bin', offset: 0x0000 },
@@ -141,12 +146,44 @@ Each firmware configuration has the following structure:
             max_length: 100,                  // Max bytes (with null padding)
             postfix: '.local'                 // Optional: append to display
         }
-    ]
+    ],
+    resetVideo: 'https://.../my-reset-instructions.webm', // Optional (wizard.html only): overrides the
+                                                             // step-3 "press RESET" video for this firmware
+    sourceUrl: 'https://github.com/you/your-repo/tree/main/examples/foo' // Optional: "View source"
+                                                                           // link on the firmware card/info panel
 }
 ```
 
 This will result in this UI:
 <img width="481" height="208" alt="image" src="https://github.com/user-attachments/assets/8c104666-036a-4e3f-b586-23093ea244ac" />
+
+#### 3. Site-wide branding (manifest.json only)
+
+Firmware entries aren't the only thing a `manifest.json` (see "For PlatformIO projects"
+below) can carry - a `site` block alongside them renames the tool itself and swaps its
+generic instructional media for something specific to your project:
+
+```javascript
+{
+  "site": {
+    "title": "My Project Flasher",       // replaces the page <title> and <h1> in both index.html and wizard.html
+    "subtitle": "Flash any example straight from your browser", // shown under the <h1>
+    "bootModeVideo": "https://.../my-boot-instructions.webm"    // wizard.html step 1 only - see note below
+  },
+  "firmwares": { ... }
+}
+```
+
+`bootModeVideo` is site-wide only, not per-firmware: wizard.html's step 1 (where it's
+shown) runs *before* firmware selection in step 2, so there's no firmware-specific video
+to pick yet. `resetVideo` (step 3, shown *after* selection) can be set per-firmware
+instead - see the `FIRMWARE_CONFIGS` structure above - and falls back to `site.resetVideo`
+if the selected firmware doesn't set its own.
+
+This has no equivalent in hand-written `config.js` entries - it's specifically a
+`manifest.json`-level concept, generated from your own repo's `flasher-manifest.yml`
+(see "For PlatformIO projects" below) via a top-level `site:` key alongside the
+per-example `examples:` key.
 
 ### For PlatformIO projects: automate it with the reusable Action
 
@@ -156,11 +193,13 @@ subdirectory, hand-writing a `config.js` entry - is exactly what
 maintaining firmware here by hand, your own repo can:
 
 1. Have a `platformio.ini` that builds one environment per firmware/example you want
-   flashable (see [esp32_ble_wedo](https://github.com/lemio/esp32_ble_wedo)'s root
+   flashable (see [esp32_PoweredUp](https://github.com/lemio/esp32_PoweredUp)'s root
    `platformio.ini` for a working example - one environment per example sketch).
 2. Add a `flasher-manifest.yml` declaring each environment's display name, description,
-   and any flash-time-patchable variables (the WiFi SSID/password pattern above,
-   generalized).
+   any flash-time-patchable variables (the WiFi SSID/password pattern above,
+   generalized), and optionally a top-level `site:` block to rename the tool and swap
+   its instructional videos for ones specific to your project (see "Site-wide branding"
+   above).
 3. Call this Action from your own repo's workflow:
    ```yaml
    - uses: lemio/ESP32-S3-Flasher/action@main
@@ -176,10 +215,11 @@ maintaining firmware here by hand, your own repo can:
    `GITHUB_TOKEN`, no secrets needed) and enable GitHub Pages on it.
 
 The web app here (`index.html`/`wizard.html`) automatically `fetch()`es a
-`manifest.json` next to itself on page load and merges any firmwares it finds into
-`FIRMWARE_CONFIGS` alongside whatever's hardcoded in `config.js` - so a repo using the
-Action gets its own fully independent flasher page, with its own firmware list, without
-touching this repo's `config.js` at all.
+`manifest.json` next to itself on page load - shape `{site: {...}, firmwares: {...}}` -
+merging `firmwares` into `FIRMWARE_CONFIGS` alongside whatever's hardcoded in
+`config.js`, and applying `site`'s branding overrides if present. So a repo using the
+Action gets its own fully independent flasher page, with its own firmware list and its
+own name, without touching this repo's `config.js` or HTML at all.
 
 ### Adding Your Own Firmware (manual / non-PlatformIO projects)
 
@@ -309,13 +349,17 @@ open http://localhost:8080
 **Device not detected?**
 - Make sure your device is connected via USB
 - Try a different USB cable
-- Ensure the device is in download mode (hold BOOT button while pressing RESET)
 - Make sure that the vendor id of the device is added to the filter. To show the vendor ID of a device; open the console in the brower and paste `navigator.serial.requestPort().then(x => console.log(x,x.getInfo()))` this will give you the device and vendor ID of your device.
 
 **Flash fails?**
 - Try disconnecting and reconnecting
 - Check the console output for detailed error messages
 - Ensure the firmware files are accessible
+- `index.html`'s Connect button just opens the port - it doesn't touch the device's boot
+  state. Flash Device is what pulses it into bootloader mode and syncs, every time (not
+  just the first) - if that fails with "No serial data received", the device didn't
+  respond to the automatic reset-into-bootloader attempt; put it in boot mode manually
+  (hold BOOT, press RESET, release both) and try again
 
 **Variables not being replaced?**
 - Make sure you've entered values in the configuration fields
@@ -323,10 +367,13 @@ open http://localhost:8080
 - Verify the console output shows "Replacing variables in firmware..."
 
 **Device doesn't reboot into the new firmware after flashing?**
-- Both `index.html` and `wizard.html` try an automatic reset once flashing finishes -
-  if it doesn't take (some board/browser combinations still need it), just press the
-  device's physical RESET button. Boards connected via their native USB-JTAG/Serial
-  port (rather than an external USB-UART bridge chip) need a different reset sequence
-  than boards connected the classic way, which is why this could fail silently on some
-  boards even though flashing itself succeeded.
+- Both `index.html` and `wizard.html` try an automatic reset once flashing finishes, by
+  pulsing the RTS line directly (assert, wait, release) via `Transport.setRTS()`. This
+  is deliberately *not* `esploader.after('hard_reset', ...)` from esptool-js - that
+  method only ever *releases* RTS, assuming it's already asserted from an earlier step;
+  in practice that assumption doesn't always hold, and it reports success while the
+  device stays in bootloader mode until a manual power cycle. The explicit pulse
+  sequence here matches what's confirmed working by other web flashers (e.g.
+  [ESPConnect](https://github.com/thelastoutpostworkshop/ESPConnect)). If it still
+  doesn't take on some board/browser combination, just press the physical RESET button.
 

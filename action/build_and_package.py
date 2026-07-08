@@ -2,9 +2,12 @@
 """
 Packages a PlatformIO project's already-built example environments into a self-contained
 GitHub Pages-ready folder: this repo's web app (index.html/wizard.html/config.js/videos),
-a manifest.json describing each example (name/description/variables from the consuming
-repo's flasher-manifest.yml, files/offsets discovered from the PlatformIO build output),
-and the compiled binaries themselves.
+a manifest.json describing each example (name/description/variables/hardware/custom
+videos from the consuming repo's flasher-manifest.yml, files/offsets discovered from the
+PlatformIO build output) plus an optional site-wide branding block (also from
+flasher-manifest.yml's `site:` key - title/subtitle/video overrides applied regardless
+of which firmware is selected), and the compiled binaries themselves. manifest.json's
+shape is `{"site": {...}, "firmwares": {"env_name": {...}, ...}}`.
 
 Expects `pio run` to have already been run in the consuming repo (this script only
 collects and packages its output - it doesn't invoke PlatformIO itself, so it works the
@@ -54,10 +57,23 @@ def read_boards(project_dir: Path) -> dict:
     return boards
 
 
-def build_manifest(project_dir: Path, manifest_config_path: Path) -> dict:
+# Per-firmware fields copied through verbatim from flasher-manifest.yml if present -
+# see that file's own comments, or README.md's manifest schema section, for what each
+# one does in the web app. expectedBehavior is wizard.html-only (step 4's bulleted "What
+# to Expect" list, with {variable} placeholders substituted with the values the user
+# entered) - falls back to a single-item list built from `description` if not set.
+# sourceUrl is an optional link (e.g. to the example's source or README on GitHub) shown
+# on its firmware card/info panel, for users who want to see what they're about to flash.
+OPTIONAL_ENTRY_FIELDS = ["bootModeVideo", "resetVideo", "expectedBehavior", "sourceUrl"]
+
+
+def build_manifest(project_dir: Path, manifest_config_path: Path) -> tuple[dict, dict]:
     config = {}
+    site = {}
     if manifest_config_path.is_file():
-        config = yaml.safe_load(manifest_config_path.read_text()).get("examples", {})
+        parsed = yaml.safe_load(manifest_config_path.read_text()) or {}
+        config = parsed.get("examples", {})
+        site = parsed.get("site", {})
 
     pio_build_dir = project_dir / ".pio" / "build"
     if not pio_build_dir.is_dir():
@@ -91,10 +107,13 @@ def build_manifest(project_dir: Path, manifest_config_path: Path) -> dict:
             entry["hardware"] = hardware
         if "variables" in entry_config:
             entry["variables"] = entry_config["variables"]
+        for field in OPTIONAL_ENTRY_FIELDS:
+            if field in entry_config:
+                entry[field] = entry_config[field]
 
         manifest[env_name] = entry
         manifest[env_name]["_source_files"] = found  # consumed by copy step below, stripped after
-    return manifest
+    return manifest, site
 
 
 def copy_binaries(manifest: dict, action_dir: Path, output_dir: Path):
@@ -133,14 +152,15 @@ def main():
     project_dir = args.project_dir.resolve()
     output_dir = args.output_dir.resolve()
 
-    manifest = build_manifest(project_dir, project_dir / args.manifest_config)
+    manifest, site = build_manifest(project_dir, project_dir / args.manifest_config)
     if not manifest:
         sys.exit("No built environments with a firmware.bin found - nothing to package")
 
     copy_webapp(action_dir, output_dir)
     copy_binaries(manifest, action_dir, output_dir)
 
-    (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    output = {"site": site, "firmwares": manifest}
+    (output_dir / "manifest.json").write_text(json.dumps(output, indent=2) + "\n")
     print(f"Packaged {len(manifest)} firmware(s) into {output_dir}")
 
 
