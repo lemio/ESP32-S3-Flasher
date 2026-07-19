@@ -1,6 +1,6 @@
 # ESP32-S3 Web Flasher
 
-You can try it out youself on Github pages. [Wizard](https://lemio.github.io/ESP32-S3-Flasher/wizard.html) & [Advanced](https://lemio.github.io/ESP32-S3-Flasher/index.html)
+You can try it out youself on Github pages (as an example I used EmbeddedScreenSharing). [Wizard](https://lemio.github.io/EmbeddedScreenSharing/wizard.html) & [Single Page](https://lemio.github.io/EmbeddedScreenSharing/index.html)
 
 https://github.com/user-attachments/assets/0cbbe652-9fc3-4732-ac1d-91ecdca1defe
 
