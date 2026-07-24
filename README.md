@@ -14,6 +14,9 @@ for the fastest path if you're already using PlatformIO - a real example:
 [esp32_PoweredUp](https://github.com/lemio/esp32_PoweredUp), whose own GitHub Pages site
 is built entirely by this tool's reusable Action.
 
+<img width="3432" height="2418" alt="image" src="https://github.com/user-attachments/assets/624c3a63-f4a3-4385-8ca7-27c81ae52997" />
+This webflasher has the potential to help library builders to get users to quickly test the examples in the library.
+
 ## The User Interface
 
 This project contains two different types of interface one is the index.html the other is wizard.html. wizard.html is intended for beginners and people that normally don't deal with terminals, firmware etc. You can replace the short videos with your own product.
