@@ -14,15 +14,6 @@ const CONFIG = {
     // issue. If flashing is unreliable on your hardware, don't assume slower is safer -
     // try a higher rate (e.g. 460800 or 921600) as well as a lower one.
     BAUD_RATE: 460800,
-    // The post-flash serial monitor is a completely separate concern from BAUD_RATE
-    // above - that one only has to match esptool's own sync/flash handshake speed,
-    // which the ROM bootloader auto-detects. This one has to match whatever the
-    // firmware's own `Serial.begin(...)` call actually uses, which esptool has no way
-    // to know or negotiate - reading at the wrong rate doesn't degrade gracefully, it
-    // just produces garbage bytes (classic UART framing-error symptom). 115200 is the
-    // Arduino default and what every firmware in this repo's own examples uses; change
-    // this if your firmware calls Serial.begin() with something else.
-    MONITOR_BAUD_RATE: 115200,
     // Cosmetic only (titles, button/log text, the generated esptool.py comment) - it
     // does NOT restrict which chip can connect. esptool-js's own sync/handshake
     // auto-detects the real connected chip (plain ESP32, S2, S3, C3, C6, ...)
@@ -57,20 +48,13 @@ const CONFIG = {
 
 // No firmwares are hardcoded here anymore - this file is a generic flashing UI that any
 // repo can point at its own manifest.json (see README.md's "For PlatformIO projects"
-// section), or you can hand-add entries here directly. Shape of an entry, for reference
-// (this used to be a live, uncommented object literal - a real bug: it showed up as an
-// actual selectable "Human-readable name" / "Brief description (wizard only)" card in
-// both index.html and wizard.html's firmware lists, merged in via loadManifest()'s
-// Object.assign(FIRMWARE_CONFIGS, ...) which adds to this object rather than replacing
-// it, so a live dummy entry here was never overwritten by real manifest.json data):
+// section), or you can hand-add entries here directly. Shape of an entry, for reference:
 //
 // const FIRMWARE_CONFIGS = {
 //   'my-firmware-key': {
 //     name: 'Human-readable name',
 //     description: 'Brief description (wizard only)',
 //     hardware: 'ESP32-S3-DevKitC-1',      // board/chip this firmware targets - shown in the UI
-//                                          // (or an array of {name, url} when one firmware
-//                                          // supports multiple distinct physical boards)
 //     expectedBehavior: [                   // wizard only
 //       'What happens after flashing',
 //       'Can include HTML like <b>bold</b> or <a href="...">links</a>'
