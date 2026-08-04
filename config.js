@@ -1,35 +1,76 @@
-// ESP32-S3 Flash Configuration
+// ESP32 Flash Configuration
 // This file contains the configuration for both index.html and wizard.html
 
 const CONFIG = {
     DISCONNECT_WAIT_MS: 1500,
-    BAUD_RATE: 115200,
-    CHIP_NAME: "ESP32-S3",
+    // Used for the whole session - the initial sync AND the flash write itself (the
+    // ESP32 ROM bootloader auto-detects baud from the sync command's own byte pattern,
+    // so there's no separate low-speed handshake stage to worry about). 115200 is the
+    // usual "safe" default, but it is NOT universally the most reliable one: on a
+    // classic ESP32 WROOM board with a CH340 USB-serial chip, 115200 reproducibly
+    // corrupted the sync/flash over Web Serial (garbled reads, repeated resets) across
+    // 8 attempts on 2 different cables/ports, while 460800 flashed cleanly and
+    // repeatedly (and ~4x faster) - a likely CH340 baud-divisor quirk, not a cable/port
+    // issue. If flashing is unreliable on your hardware, don't assume slower is safer -
+    // try a higher rate (e.g. 460800 or 921600) as well as a lower one.
+    BAUD_RATE: 460800,
+    // The post-flash serial monitor is a completely separate concern from BAUD_RATE
+    // above - that one only has to match esptool's own sync/flash handshake speed,
+    // which the ROM bootloader auto-detects. This one has to match whatever the
+    // firmware's own `Serial.begin(...)` call actually uses, which esptool has no way
+    // to know or negotiate - reading at the wrong rate doesn't degrade gracefully, it
+    // just produces garbage bytes (classic UART framing-error symptom). 115200 is the
+    // Arduino default and what every firmware in this repo's own examples uses; change
+    // this if your firmware calls Serial.begin() with something else.
+    MONITOR_BAUD_RATE: 115200,
+    // Cosmetic only (titles, button/log text, the generated esptool.py comment) - it
+    // does NOT restrict which chip can connect. esptool-js's own sync/handshake
+    // auto-detects the real connected chip (plain ESP32, S2, S3, C3, C6, ...)
+    // regardless of this value, so the whole ESP32 family already flashes fine as-is.
+    // Set this to whatever your project actually targets, e.g. "ESP32" or "ESP32-C3".
+    CHIP_NAME: "ESP32",
+    // Which USB-to-serial bridge chips show up in the browser's "Connect" device
+    // picker. A device not covered by any entry here simply won't be selectable -
+    // add its usbVendorId (and optionally usbProductId) below.
     FILTERS: [
-        {usbVendorId: 0x10C4},    // SILICON_LABS
-        {usbVendorId: 0x303A},    // ESPRESSIF
+        {usbVendorId: 0x1A86},    // WCH (CH340/CH343/CH9102) - most common on generic/plain ESP32 dev boards
+        {usbVendorId: 0x10C4},    // SILICON_LABS (CP210x) - common on ESP32-S3-DevKitC and similar
+        {usbVendorId: 0x303A},    // ESPRESSIF (native USB-JTAG/CDC, e.g. ESP32-S3/C3/C6 native USB port)
         {usbVendorId: 0x0403},    // FTDI
         {usbVendorId: 0x1B4F},    // SparkFun
         {usbVendorId: 0x2341}     // Arduino
     ]
-    // Device and vendor IDs can be set in the esp32
-    // https://docs.espressif.com/projects/arduino-esp32/en/latest/api/usb.html
     // Vendors IDs are protected by USB-IF and can be found online
     // https://devicehunt.com/view/type/usb/vendor/10C4/product/EA60
     //                              {usbProductId: 0xEA60,  usbVendorId: 0x10C4}
     // ESP32-S3-Devkit-C1 UART Port: {(CP210x UART Bridge),  (SILICON_LABS)}
     // ESP32-S3-Devkit-C1 USB Port: {usbProductId: 4097 0x1001, usbVendorId: 12346 = 0x303A (ESPRESSIF)}
+    //
+    // A consuming repo can also override FILTERS (and CHIP_NAME) without touching this
+    // file at all, via flasher-manifest.yml's top-level `site:` block - see README.md's
+    // "Configure it for your own project" section. Shape:
+    //   site:
+    //     chipName: ESP32
+    //     filters:
+    //       - usbVendorId: 0x1A86
 };
 
 // No firmwares are hardcoded here anymore - this file is a generic flashing UI that any
 // repo can point at its own manifest.json (see README.md's "For PlatformIO projects"
-// section), or you can hand-add entries here directly. Shape of an entry, for reference:
+// section), or you can hand-add entries here directly. Shape of an entry, for reference
+// (this used to be a live, uncommented object literal - a real bug: it showed up as an
+// actual selectable "Human-readable name" / "Brief description (wizard only)" card in
+// both index.html and wizard.html's firmware lists, merged in via loadManifest()'s
+// Object.assign(FIRMWARE_CONFIGS, ...) which adds to this object rather than replacing
+// it, so a live dummy entry here was never overwritten by real manifest.json data):
 //
 // const FIRMWARE_CONFIGS = {
 //   'my-firmware-key': {
 //     name: 'Human-readable name',
 //     description: 'Brief description (wizard only)',
 //     hardware: 'ESP32-S3-DevKitC-1',      // board/chip this firmware targets - shown in the UI
+//                                          // (or an array of {name, url} when one firmware
+//                                          // supports multiple distinct physical boards)
 //     expectedBehavior: [                   // wizard only
 //       'What happens after flashing',
 //       'Can include HTML like <b>bold</b> or <a href="...">links</a>'

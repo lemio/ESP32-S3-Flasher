@@ -18,6 +18,7 @@ Usage: build_and_package.py --project-dir . --output-dir docs
 import argparse
 import configparser
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -27,34 +28,108 @@ try:
 except ImportError:
     sys.exit("PyYAML is required (pip install pyyaml)")
 
-# Standard ESP32 Arduino/PlatformIO merged-image flash offsets.
+# Standard ESP32 Arduino/PlatformIO merged-image flash offsets. bootloader.bin is the
+# one exception - its offset depends on the target chip (see BOOTLOADER_OFFSET_BY_MCU
+# below); the value here is only the fallback used when a board's MCU can't be
+# determined at all.
 FLASH_OFFSETS = {
     "bootloader.bin": 0x0000,
     "partitions.bin": 0x8000,
     "boot_app0.bin": 0xE000,
     "firmware.bin": 0x10000,
 }
+# The second-stage bootloader's flash offset is chip-specific, not a fixed constant:
+# ESP32/S2's ROM loader looks for it at 0x1000, while S3/C-series/H-series look at 0x0
+# (P4 differs again, at 0x2000, listed here for completeness even though nothing in
+# this repo's boards uses it yet). Getting this wrong doesn't fail the flash write -
+# esptool happily writes bootloader.bin whatever offset it's told - it fails at boot:
+# the chip's ROM can't find a valid image header at ITS fixed lookup offset, prints
+# "invalid header: 0x......." on repeat, and watchdog-resets in a loop forever. This
+# was hit for real: FLASH_OFFSETS used to hardcode 0x0 unconditionally (correct for
+# this repo's original S3 boards, e.g. "T-Display-AMOLED" -> mcu esp32s3), which
+# silently corrupted flashing for a later-added plain-ESP32 board ("esp32dev", mcu
+# esp32) with exactly that symptom.
+BOOTLOADER_OFFSET_BY_MCU = {
+    "esp32": 0x1000,
+    "esp32s2": 0x1000,
+    "esp32s3": 0x0000,
+    "esp32c2": 0x0000,
+    "esp32c3": 0x0000,
+    "esp32c6": 0x0000,
+    "esp32h2": 0x0000,
+    "esp32p4": 0x2000,
+}
 WEBAPP_ASSETS = ["index.html", "wizard.html", "config.js", "boot_mode.webm", "reset_only.webm"]
 
 
-def read_boards(project_dir: Path) -> dict:
+def read_boards(project_dir: Path) -> tuple[dict, str]:
     """Maps env name -> board id by reading platformio.ini directly (no `pio` CLI call
-    needed) - falls back to the base [env] section's board if a specific environment
-    doesn't set its own. interpolation=None since we only need literal string values;
-    PlatformIO's own `${env.foo}` syntax isn't ConfigParser's `%(foo)s` syntax, but
-    disabling interpolation avoids any edge cases with unusual ini content."""
+    needed). Resolves `board` the same way PlatformIO itself does: an env's own
+    `board =` wins if set; otherwise it's inherited via `extends = env:<name>` (which
+    can chain - e.g. this repo's `env:webRAW-CYD` sets no board of its own at all,
+    only `extends = env:webJPEG-CYD`, which does), and `extends = env` (or no extends
+    at all) falls back to the base [env] section. A section with no resolvable board
+    anywhere in its chain gets None - get_board_mcu() already handles that by falling
+    back to FLASH_OFFSETS' default and printing a warning, so this only needs to not
+    crash on it (e.g. a cycle, or an extends target that doesn't exist).
+    interpolation=None since we only need literal string values; PlatformIO's own
+    `${env.foo}` syntax isn't ConfigParser's `%(foo)s` syntax, but disabling
+    interpolation avoids any edge cases with unusual ini content."""
     ini_path = project_dir / "platformio.ini"
     if not ini_path.is_file():
-        return {}
+        return {}, "boards"
     parser = configparser.ConfigParser(interpolation=None)
     parser.read(ini_path)
-    default_board = parser.get("env", "board", fallback=None) if parser.has_section("env") else None
+
+    def resolve_board(section: str, seen: set) -> str | None:
+        if not parser.has_section(section) or section in seen:
+            return None
+        seen.add(section)
+        own_board = parser.get(section, "board", fallback=None)
+        if own_board:
+            return own_board
+        extends = parser.get(section, "extends", fallback=None)
+        if not extends:
+            return None
+        # `extends` can be a comma/whitespace-separated list; PlatformIO applies them
+        # left-to-right with later ones overriding earlier ones, so the *last* one
+        # that actually resolves to a board wins - walk in order and keep going.
+        board = None
+        for target in extends.replace(",", " ").split():
+            resolved = resolve_board(target, seen)
+            if resolved:
+                board = resolved
+        return board
+
     boards = {}
     for section in parser.sections():
         if section.startswith("env:"):
             env_name = section[len("env:"):]
-            boards[env_name] = parser.get(section, "board", fallback=default_board)
-    return boards
+            boards[env_name] = resolve_board(section, set())
+    boards_dir = parser.get("platformio", "boards_dir", fallback="boards") if parser.has_section("platformio") else "boards"
+    return boards, boards_dir
+
+
+def get_board_mcu(board_id: str, project_dir: Path, boards_dir: str) -> str | None:
+    """Resolves a PlatformIO board id (e.g. "esp32dev", "T-Display-AMOLED") to its
+    `build.mcu` field (e.g. "esp32", "esp32s3") by locating that board's JSON
+    definition. Checks the project's own custom boards_dir first (a custom board
+    overrides a built-in one of the same name), then falls back to the boards/
+    directory of whichever installed espressif32 platform package(s) `pio run` already
+    populated under PIO's core dir - no `pio` CLI call needed, since the packages are
+    already on disk by the time this script runs (after `pio run`)."""
+    if not board_id:
+        return None
+    candidates = [project_dir / boards_dir / f"{board_id}.json"]
+    core_dir = Path(os.environ.get("PLATFORMIO_CORE_DIR", str(Path.home() / ".platformio")))
+    candidates += sorted(core_dir.glob(f"platforms/espressif32*/boards/{board_id}.json"))
+    for path in candidates:
+        if path.is_file():
+            try:
+                return json.loads(path.read_text()).get("build", {}).get("mcu")
+            except (json.JSONDecodeError, OSError):
+                continue
+    return None
 
 
 # Per-firmware fields copied through verbatim from flasher-manifest.yml if present -
@@ -64,7 +139,9 @@ def read_boards(project_dir: Path) -> dict:
 # entered) - falls back to a single-item list built from `description` if not set.
 # sourceUrl is an optional link (e.g. to the example's source or README on GitHub) shown
 # on its firmware card/info panel, for users who want to see what they're about to flash.
-OPTIONAL_ENTRY_FIELDS = ["bootModeVideo", "resetVideo", "expectedBehavior", "sourceUrl"]
+# recommended (bool) sorts that firmware to the top of the list with a badge - at most
+# one example should set this.
+OPTIONAL_ENTRY_FIELDS = ["bootModeVideo", "resetVideo", "expectedBehavior", "sourceUrl", "recommended"]
 
 
 def build_manifest(project_dir: Path, manifest_config_path: Path) -> tuple[dict, dict]:
@@ -79,7 +156,7 @@ def build_manifest(project_dir: Path, manifest_config_path: Path) -> tuple[dict,
     if not pio_build_dir.is_dir():
         sys.exit(f"No .pio/build directory found under {project_dir} - run `pio run` first")
 
-    boards = read_boards(project_dir)
+    boards, boards_dir = read_boards(project_dir)
     manifest = {}
     for env_dir in sorted(p for p in pio_build_dir.iterdir() if p.is_dir()):
         env_name = env_dir.name
@@ -88,12 +165,20 @@ def build_manifest(project_dir: Path, manifest_config_path: Path) -> tuple[dict,
             print(f"Skipping '{env_name}': no firmware.bin in {env_dir}")
             continue
 
+        mcu = get_board_mcu(boards.get(env_name), project_dir, boards_dir)
+        bootloader_offset = BOOTLOADER_OFFSET_BY_MCU.get(mcu)
+        if bootloader_offset is None:
+            bootloader_offset = FLASH_OFFSETS["bootloader.bin"]
+            print(f"'{env_name}': unrecognized MCU {mcu!r} for board {boards.get(env_name)!r} - "
+                  f"defaulting bootloader.bin to 0x{bootloader_offset:04x}, verify this is correct")
+        offsets = {**FLASH_OFFSETS, "bootloader.bin": bootloader_offset}
+
         # boot_app0.bin is never in `found` (PlatformIO doesn't produce it - it's a
         # static file bundled with this Action, see copy_binaries()) but is always
         # present in the packaged output, so it's always listed here too.
         entry_config = config.get(env_name, {})
         files = [
-            {"path": f"firmware/{env_name}/{name}", "offset": FLASH_OFFSETS[name]}
+            {"path": f"firmware/{env_name}/{name}", "offset": offsets[name]}
             for name in ["bootloader.bin", "partitions.bin", "boot_app0.bin", "firmware.bin"]
             if name in found or name == "boot_app0.bin"
         ]
@@ -102,6 +187,14 @@ def build_manifest(project_dir: Path, manifest_config_path: Path) -> tuple[dict,
             "description": entry_config.get("description", ""),
             "files": files,
         }
+        # Lets the flasher UI gray out/sort firmwares the connected device's actual
+        # chip (from esptool-js's own post-sync chip detection, not just the vendor
+        # ID used to guess a reset strategy) can't run - e.g. don't offer an esp32s3
+        # firmware once an esp32 has already answered the sync. None if the board's
+        # MCU couldn't be resolved (see get_board_mcu()) - the UI should treat that as
+        # "unknown, don't gate" rather than "known incompatible".
+        if mcu:
+            entry["mcu"] = mcu
         hardware = entry_config.get("hardware", boards.get(env_name))
         if hardware:
             entry["hardware"] = hardware

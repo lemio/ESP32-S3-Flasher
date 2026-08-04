@@ -1,10 +1,10 @@
-# ESP32-S3 Web Flasher
+# ESP32 Web Flasher
 
 You can try it out youself on Github pages (as an example I used EmbeddedScreenSharing). [Wizard](https://lemio.github.io/EmbeddedScreenSharing/wizard.html) & [Single Page](https://lemio.github.io/EmbeddedScreenSharing/index.html)
 
 https://github.com/user-attachments/assets/0cbbe652-9fc3-4732-ac1d-91ecdca1defe
 
-A simple, browser-based tool for flashing ESP32-S3 devices using the Web Serial API. Built with the ESPtool-js library made by [Esperessif](https://github.com/espressif/esptool-js). Next to flashing it can also alter the firmware by replacing *magic* keywords with other content; this could be usefull for wifi setup or other settings that you want end-users to change.
+A simple, browser-based tool for flashing ESP32 devices (plain ESP32, S2, S3, C3, C6, ...) using the Web Serial API. Built with the ESPtool-js library made by [Esperessif](https://github.com/espressif/esptool-js), which auto-detects whichever chip in the family is actually connected. Next to flashing it can also alter the firmware by replacing *magic* keywords with other content; this could be usefull for wifi setup or other settings that you want end-users to change.
 
 **This is a generic tool, not tied to any one project** - no firmware ships with this
 repo. Point it at your own project's `manifest.json` (any PlatformIO-based repo can
@@ -45,15 +45,18 @@ The index.html flow is intended for more experienced users; and also gives you s
   - Google Chrome (version 89+)
   - Microsoft Edge (version 89+)
   - Opera (version 75+)
-- ESP32-S3 device connected via USB (only needs to be in download mode once you click
-  Flash Device - connecting doesn't touch its boot state)
+- An ESP32-family device (plain ESP32, S2, S3, C3, C6, ...) connected via USB whose
+  USB-to-serial bridge chip's vendor ID is listed in `config.js`'s `FILTERS` (see
+  "Configuration File Structure" below - CH340, CP210x, FTDI and native USB-JTAG/CDC are
+  covered by default). Only needs to be in download mode once you click Flash Device -
+  connecting doesn't touch its boot state.
 
 ## Usage
 
 1. **Open the flasher**: Open `index.html` in a supported browser
 2. **Select firmware**: Choose the firmware you want to flash from the dropdown
 3. **Configure variables** (if available): Enter your WiFi SSID, password, and mDNS hostname
-4. **Connect device**: Click "Connect to ESP32-S3" and select your device from the browser popup
+4. **Connect device**: Click "Connect to ESP32" (label follows `config.js`'s `CHIP_NAME`) and select your device from the browser popup
 5. **Flash**: Click "Flash Device" to start the flashing process
 
 ## Available Firmware
@@ -68,7 +71,7 @@ below), or add entries to `config.js` directly (see
 
 This tool uses:
 - [esptool](https://github.com/espressif/esptool-js) -  JavaScript implementation of esptool
-- Web Serial API - For communicating with the ESP32-S3 over USB
+- Web Serial API - For communicating with the ESP32 over USB
 - Web Crypto API - For SHA256 hash recalculation
 
 ### Variable Replacement
@@ -103,11 +106,23 @@ The `config.js` file contains two main objects:
 ```javascript
 const CONFIG = {
     DISCONNECT_WAIT_MS: 1500,      // Wait time after disconnect
-    BAUD_RATE: 115200,              // Serial communication speed
-    CHIP_NAME: "ESP32-S3",          // Target chip type
-    FILTERS: [                      // USB vendor IDs for device detection
-        {usbVendorId: 0x10C4},      // SILICON_LABS
-        {usbVendorId: 0x303A},      // ESPRESSIF
+    BAUD_RATE: 460800,              // Serial speed for the whole session (sync + flashing).
+                                     // Higher isn't automatically riskier - the ROM auto-detects
+                                     // baud from the sync command itself, and 115200 has been
+                                     // observed to be *less* reliable than 460800 on some CH340
+                                     // boards (garbled sync/flash reads). If flashing is unreliable
+                                     // on your hardware, try both a higher and a lower value.
+    CHIP_NAME: "ESP32",             // Cosmetic label only (button text, boot-mode instructions,
+                                     // the downloaded esptool.py comment) - esptool-js auto-detects
+                                     // the real connected chip regardless, so this doesn't restrict
+                                     // which ESP32-family chip can connect. Set to whatever your
+                                     // project targets, e.g. "ESP32-S3" or "ESP32-C3".
+    FILTERS: [                      // Which USB-to-serial bridge vendor IDs show up in the
+                                     // browser's connect picker - a device not covered here isn't
+                                     // selectable
+        {usbVendorId: 0x1A86},      // WCH (CH340/CH343/CH9102) - most common on generic/plain ESP32 boards
+        {usbVendorId: 0x10C4},      // SILICON_LABS (CP210x)
+        {usbVendorId: 0x303A},      // ESPRESSIF (native USB-JTAG/CDC)
         {usbVendorId: 0x0403},      // FTDI
         {usbVendorId: 0x1B4F},      // SparkFun
         {usbVendorId: 0x2341}       // Arduino
@@ -120,7 +135,9 @@ If your device isn't detected, find its vendor ID using the browser console:
 ```javascript
 navigator.serial.requestPort().then(x => console.log(x.getInfo()))
 ```
-Then add it to the `FILTERS` array.
+Then add it to the `FILTERS` array. A consuming repo that generates `manifest.json` via the
+reusable Action can instead set `site.filters`/`site.chipName` in `flasher-manifest.yml` - see
+"Site-wide branding" below - without touching `config.js` at all.
 
 #### 2. **FIRMWARE_CONFIGS** - Firmware definitions
 
@@ -171,11 +188,22 @@ generic instructional media for something specific to your project:
   "site": {
     "title": "My Project Flasher",       // replaces the page <title> and <h1> in both index.html and wizard.html
     "subtitle": "Flash any example straight from your browser", // shown under the <h1>
-    "bootModeVideo": "https://.../my-boot-instructions.webm"    // wizard.html step 1 only - see note below
+    "bootModeVideo": "https://.../my-boot-instructions.webm",   // wizard.html step 1 only - see note below
+    "chipName": "ESP32-C3",              // overrides config.js's CHIP_NAME - drives the connect button/boot-mode
+                                          // instructions text and the chip flag in the downloaded esptool.py comment
+    "filters": [                         // overrides config.js's FILTERS - which USB devices show up in the
+      { "usbVendorId": 6790 }            // browser's connect picker (6790 = 0x1A86, WCH/CH340)
+    ]
   },
   "firmwares": { ... }
 }
 ```
+
+`chipName` and `filters` are cosmetic-and-picker only, same as `config.js`'s `CHIP_NAME`/`FILTERS`
+(see "Configuration File Structure" below) - they don't restrict which chip can actually
+connect, since esptool-js auto-detects the real chip on sync regardless. They just mean a
+consuming repo targeting a plain ESP32 (or C3/C6/etc.) doesn't need to fork `config.js` by
+hand to get accurate button text and the right devices listed in the picker.
 
 `bootModeVideo` is site-wide only, not per-firmware: wizard.html's step 1 (where it's
 shown) runs *before* firmware selection in step 2, so there's no firmware-specific video
