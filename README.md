@@ -165,6 +165,19 @@ Each firmware configuration has the following structure:
             default_value: 'MyNetwork',       // Default value
             max_length: 100,                  // Max bytes (with null padding)
             postfix: '.local'                 // Optional: append to display
+        },
+        {
+            firmware_name: '|*ROTATION*|',    // Same placeholder/patching mechanism as above, but
+            readable_name: 'Screen Rotation', // rendered as a <select> dropdown instead of free text
+            type: 'enum',                     // by setting type: 'enum' and providing `options`
+            options: [                        // `value` is written into the firmware, `label` is
+                { value: '0', label: '0°' },    // shown to the user. A plain string entry (no
+                { value: '1', label: '90°' },   // {value, label}) is used as both.
+                { value: '2', label: '180°' },
+                { value: '3', label: '270°' }
+            ],
+            default_value: '1',
+            max_length: 16                     // still needs to fit firmware_name itself
         }
     ],
     resetVideo: 'https://.../my-reset-instructions.webm', // Optional (wizard.html only): overrides the
@@ -308,6 +321,23 @@ variables: [
         readable_name: 'WiFi Password',
         default_value: 'password123',
         max_length: 100
+    },
+    {
+        // Constrained to a fixed set of choices - rendered as a dropdown instead of
+        // a text field. `value` is what's written into the firmware; `label` is
+        // what the user sees. Useful for things like tft.setRotation(N) where only
+        // a handful of values are ever valid.
+        firmware_name: '|*ROTATION*|',
+        readable_name: 'Screen Rotation',
+        type: 'enum',
+        options: [
+            { value: '0', label: '0°' },
+            { value: '1', label: '90°' },
+            { value: '2', label: '180°' },
+            { value: '3', label: '270°' }
+        ],
+        default_value: '1',
+        max_length: 16
     }
 ]
 ```
@@ -315,8 +345,13 @@ variables: [
 ### Variable Replacement Details
 
 - **Placeholders**: Use unique strings (e.g., `|*VAR*|`) that won't appear elsewhere in your firmware
-- **Max Length**: Must match the size allocated in your ESP32 code (usually 100 bytes)
+- **Max Length**: Must match the size allocated in your ESP32 code - big enough to hold both the
+  placeholder string itself and the longest value you'll ever substitute in (usually 100 bytes for
+  free text; a handful of bytes is enough for a short `type: 'enum'` value)
 - **Padding**: Values are automatically null-padded to `max_length`
+- **Enum type**: Set `type: 'enum'` and provide an `options` array (each either a plain string, or
+  `{value, label}` if the displayed label should differ from what's written into the firmware) to
+  render a dropdown instead of a free-text field
 - **Integrity**: Checksum and SHA256 are automatically recalculated after replacement
 - **Storage**: User values are saved in browser localStorage with key `fw_var_<firmware_name>`
 

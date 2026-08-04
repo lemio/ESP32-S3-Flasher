@@ -72,7 +72,20 @@ const CONFIG = {
 //         default_value: 'MyNetwork',       // shown as the default in the UI
 //         max_length: 100,                  // must match the fixed-size array in firmware source
 //         postfix: '.local'                 // optional: appended after the input in the UI
-//       }
+//       },
+//       {                                   // type: 'enum' renders a <select> dropdown instead
+//         firmware_name: '|*ROTATION*|',    // of a free-text <input> - same patching mechanism,
+//         readable_name: 'Screen Rotation', // just a constrained set of choices. `value` is what
+//         type: 'enum',                     // gets written into the firmware; `label` is what the
+//         options: [                        // user sees. A plain string entry (no {value,label})
+//           { value: '0', label: '0°' },    // is used as both.
+//           { value: '1', label: '90°' },
+//           { value: '2', label: '180°' },
+//           { value: '3', label: '270°' }
+//         ],
+//         default_value: '1',
+//         max_length: 16                    // still needs room for firmware_name itself (here,
+//       }                                   // '|*ROTATION*|' is 12 bytes) plus a null terminator
 //     ]
 //   }
 // };
