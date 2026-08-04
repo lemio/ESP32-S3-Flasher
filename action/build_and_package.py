@@ -67,11 +67,14 @@ def read_boards(project_dir: Path) -> tuple[dict, str]:
     needed). Resolves `board` the same way PlatformIO itself does: an env's own
     `board =` wins if set; otherwise it's inherited via `extends = env:<name>` (which
     can chain - e.g. this repo's `env:webRAW-CYD` sets no board of its own at all,
-    only `extends = env:webJPEG-CYD`, which does), and `extends = env` (or no extends
-    at all) falls back to the base [env] section. A section with no resolvable board
-    anywhere in its chain gets None - get_board_mcu() already handles that by falling
-    back to FLASH_OFFSETS' default and printing a warning, so this only needs to not
-    crash on it (e.g. a cycle, or an extends target that doesn't exist).
+    only `extends = env:webJPEG-CYD`, which does); if that still doesn't produce a
+    board, [env] is consulted as a last resort - unconditionally, whether or not the
+    section also has its own `extends`, since PlatformIO itself always implicitly
+    merges [env] into every [env:*] section regardless of other inheritance. A
+    section with no resolvable board anywhere gets None - get_board_mcu() already
+    handles that by falling back to FLASH_OFFSETS' default and printing a warning,
+    so this only needs to not crash on it (e.g. a cycle, or an extends target that
+    doesn't exist).
     interpolation=None since we only need literal string values; PlatformIO's own
     `${env.foo}` syntax isn't ConfigParser's `%(foo)s` syntax, but disabling
     interpolation avoids any edge cases with unusual ini content."""
@@ -89,17 +92,30 @@ def read_boards(project_dir: Path) -> tuple[dict, str]:
         if own_board:
             return own_board
         extends = parser.get(section, "extends", fallback=None)
-        if not extends:
-            return None
-        # `extends` can be a comma/whitespace-separated list; PlatformIO applies them
-        # left-to-right with later ones overriding earlier ones, so the *last* one
-        # that actually resolves to a board wins - walk in order and keep going.
         board = None
-        for target in extends.replace(",", " ").split():
-            resolved = resolve_board(target, seen)
-            if resolved:
-                board = resolved
-        return board
+        if extends:
+            # `extends` can be a comma/whitespace-separated list; PlatformIO applies
+            # them left-to-right with later ones overriding earlier ones, so the
+            # *last* one that actually resolves to a board wins - walk in order and
+            # keep going.
+            for target in extends.replace(",", " ").split():
+                resolved = resolve_board(target, seen)
+                if resolved:
+                    board = resolved
+        if board:
+            return board
+        # PlatformIO always implicitly merges the base [env] section into every
+        # [env:*] section for options that section doesn't set itself - regardless
+        # of whether it also uses `extends` for something else - so [env] is the
+        # last fallback here too, not just when `extends` is absent. Without this,
+        # a project where no [env:*] section repeats `board =` or `extends = env`
+        # (which is most projects, since it's redundant for PlatformIO itself)
+        # resolves to no board at all, and bootloader_offset silently falls back to
+        # the wrong default for every environment - see the FLASH_OFFSETS comment
+        # above for what that actually breaks.
+        if section != "env":
+            return resolve_board("env", seen)
+        return None
 
     boards = {}
     for section in parser.sections():
