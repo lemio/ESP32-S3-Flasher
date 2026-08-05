@@ -178,8 +178,19 @@ Each firmware configuration has the following structure:
             ],
             default_value: '1',
             max_length: 16                     // still needs to fit firmware_name itself
-        }
-    ],
+        },
+        {
+            firmware_name: '|*TZ*|',          // type: 'timezone' renders a <select> populated from
+            readable_name: 'Timezone',        // every IANA zone via the browser's own
+            type: 'timezone',                 // Intl.supportedValuesOf('timeZone') - no options list
+            max_length: 64                    // needed. Defaults to the browser's own detected zone
+        }                                     // (Intl.DateTimeFormat().resolvedOptions().timeZone)
+    ],                                        // unless localStorage already has a prior choice. What
+                                               // gets patched into firmware isn't the IANA name though
+                                               // - it's looked up in posix_tz_db.js and the matching
+                                               // POSIX TZ string (e.g. "EST5EDT,M3.2.0,M11.1.0") is
+                                               // written instead, since that's what a configTzTime()
+                                               // -style firmware API actually needs.
     resetVideo: 'https://.../my-reset-instructions.webm', // Optional (wizard.html only): overrides the
                                                              // step-3 "press RESET" video for this firmware
     sourceUrl: 'https://github.com/you/your-repo/tree/main/examples/foo' // Optional: "View source"
@@ -338,8 +349,27 @@ variables: [
         ],
         default_value: '1',
         max_length: 16
+    },
+    {
+        // Lets the user pick their timezone from every IANA zone the browser knows
+        // about (via Intl.supportedValuesOf('timeZone')), auto-selecting the
+        // browser's own detected zone (Intl.DateTimeFormat().resolvedOptions().timeZone)
+        // as the default. What's actually written into firmware is the matching
+        // POSIX TZ string from posix_tz_db.js (e.g. "EST5EDT,M3.2.0,M11.1.0" for
+        // "America/New_York") - the format a configTzTime()-style firmware API needs.
+        firmware_name: '|*TZ*|',
+        readable_name: 'Timezone',
+        type: 'timezone',
+        max_length: 64
     }
 ]
+```
+
+```cpp
+// In your ESP32 code, `|*TZ*|` gets patched with a POSIX TZ string, so use it directly
+// with the framework's timezone-aware NTP setup, e.g. on the ESP32 Arduino core:
+const char POSIX_TZ[64] = "|*TZ*|";
+configTzTime(POSIX_TZ, "pool.ntp.org");
 ```
 
 ### Variable Replacement Details
@@ -347,13 +377,19 @@ variables: [
 - **Placeholders**: Use unique strings (e.g., `|*VAR*|`) that won't appear elsewhere in your firmware
 - **Max Length**: Must match the size allocated in your ESP32 code - big enough to hold both the
   placeholder string itself and the longest value you'll ever substitute in (usually 100 bytes for
-  free text; a handful of bytes is enough for a short `type: 'enum'` value)
+  free text; a handful of bytes is enough for a short `type: 'enum'` value; 64 bytes comfortably
+  covers every `type: 'timezone'` POSIX string, the longest of which is ~44 bytes)
 - **Padding**: Values are automatically null-padded to `max_length`
 - **Enum type**: Set `type: 'enum'` and provide an `options` array (each either a plain string, or
   `{value, label}` if the displayed label should differ from what's written into the firmware) to
   render a dropdown instead of a free-text field
+- **Timezone type**: Set `type: 'timezone'` for a dropdown of every IANA timezone, auto-selecting
+  the browser's detected zone by default. No `options` needed - the list comes from the browser
+  itself, and the selected IANA name is converted to a POSIX TZ string (via the bundled
+  `posix_tz_db.js`) right before it's written into firmware
 - **Integrity**: Checksum and SHA256 are automatically recalculated after replacement
 - **Storage**: User values are saved in browser localStorage with key `fw_var_<firmware_name>`
+  (for `type: 'timezone'`, this stores the IANA name, e.g. `"America/New_York"`, not the POSIX string)
 
 ### Testing Your Configuration
 

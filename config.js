@@ -85,8 +85,20 @@ const CONFIG = {
 //         ],
 //         default_value: '1',
 //         max_length: 16                    // still needs room for firmware_name itself (here,
-//       }                                   // '|*ROTATION*|' is 12 bytes) plus a null terminator
-//     ]
+//       },                                  // '|*ROTATION*|' is 12 bytes) plus a null terminator
+//       {                                   // type: 'timezone' renders a <select> populated from
+//         firmware_name: '|*TZ*|',          // the browser's own Intl.supportedValuesOf('timeZone')
+//         readable_name: 'Timezone',        // (every IANA zone, e.g. "America/New_York"), defaulting
+//         type: 'timezone',                 // to Intl.DateTimeFormat().resolvedOptions().timeZone -
+//         max_length: 64                    // the browser's own detected zone - unless a prior
+//       }                                   // choice is already in localStorage. Firmware doesn't
+//     ]                                     // get the IANA name though: right before patching, it's
+//                                            // looked up in posix_tz_db.js and the POSIX TZ string
+//                                            // (e.g. "EST5EDT,M3.2.0,M11.1.0") is written instead -
+//                                            // what configTzTime()-style APIs actually need. Give
+//                                            // max_length enough room for the longest POSIX strings
+//                                            // (~44 bytes) plus the placeholder itself and a null
+//                                            // terminator - 64 is a safe default.
 //   }
 // };
 const FIRMWARE_CONFIGS = {};

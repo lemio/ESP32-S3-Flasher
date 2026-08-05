@@ -983,6 +983,7 @@
     <script type="module">
         import { Transport, ESPLoader } from 'https://unpkg.com/esptool-js@0.5.7/bundle.js';
         import { CONFIG, FIRMWARE_CONFIGS } from './config.js';
+        import { POSIX_TZ_DB, POSIX_TZ_ALIASES } from './posix_tz_db.js';
 
         // ==================== STATE ====================
         
@@ -1240,7 +1241,15 @@
                 const input = document.querySelector(`[data-firmware-name="${variable.firmware_name}"]`);
                 if (!input) continue;
 
-                const value = input.value;
+                // For type: "timezone", input.value is the IANA zone name shown in the
+                // dropdown (e.g. "America/New_York") - firmware needs the POSIX TZ
+                // string instead (e.g. "EST5EDT,M3.2.0,M11.1.0"), so look it up here,
+                // right before patching, rather than storing the POSIX string as the
+                // select's own value (which would make same-rule zones like
+                // America/New_York and America/Detroit indistinguishable in the UI).
+                const value = variable.type === 'timezone'
+                    ? (POSIX_TZ_DB[input.value] || POSIX_TZ_DB[POSIX_TZ_ALIASES[input.value]] || 'UTC0')
+                    : input.value;
                 const searchString = variable.firmware_name;
                 const maxLen = variable.max_length || 100;
                 
@@ -1539,6 +1548,32 @@
                     return;
                 }
 
+                if (v.type === 'timezone') {
+                    // Value stored/selected here is the IANA zone name (e.g.
+                    // "America/New_York") - readable, and what the browser's own APIs
+                    // speak. replaceVariables() converts it to the POSIX TZ string
+                    // firmware actually needs via POSIX_TZ_DB at patch time, so a
+                    // localStorage override (an explicit prior user choice) always wins
+                    // over browser auto-detection, same precedence as every other
+                    // variable type - see storage.get() below.
+                    let browserZone = 'UTC';
+                    try { browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { /* ignore */ }
+                    const zones = (typeof Intl.supportedValuesOf === 'function')
+                        ? Intl.supportedValuesOf('timeZone')
+                        : Object.keys(POSIX_TZ_DB).sort();
+                    const tzValue = storage.get(v.firmware_name, null) || browserZone || v.default_value || 'UTC';
+                    const optionsHtml = zones.map(z => `<option value="${z}" ${z === tzValue ? 'selected' : ''}>${z}</option>`).join('');
+                    html += `
+                        <div class="variable-input-group">
+                            <label for="var_${i}" ${labelClass}>${v.readable_name}</label>
+                            <div class="variable-input-wrapper">
+                                <select id="var_${i}" data-firmware-name="${v.firmware_name}">${optionsHtml}</select>
+                                ${v.postfix ? `<span class="postfix">${v.postfix}</span>` : ''}
+                            </div>
+                        </div>`;
+                    return;
+                }
+
                 const isPassword = v.readable_name.toLowerCase().includes('password');
                 const inputType = (hidePassword && isPassword) ? 'password' : 'text';
                 const passwordLabelClass = (hidePassword && isPassword) ? 'style="font-size: 0.8em; margin-bottom: 4px; color: #1a1a1a; filter: blur(4px); user-select: none;"' : labelClass;
@@ -1559,7 +1594,7 @@
 
             config.variables.forEach((v, i) => {
                 const input = document.getElementById(`var_${i}`);
-                const eventName = (v.type === 'enum' && Array.isArray(v.options)) ? 'change' : 'input';
+                const eventName = ((v.type === 'enum' && Array.isArray(v.options)) || v.type === 'timezone') ? 'change' : 'input';
                 input.addEventListener(eventName, (e) => storage.set(v.firmware_name, e.target.value));
             });
         };

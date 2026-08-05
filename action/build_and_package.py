@@ -59,7 +59,7 @@ BOOTLOADER_OFFSET_BY_MCU = {
     "esp32h2": 0x0000,
     "esp32p4": 0x2000,
 }
-WEBAPP_ASSETS = ["index.html", "wizard.html", "config.js", "boot_mode.webm", "reset_only.webm"]
+WEBAPP_ASSETS = ["index.html", "wizard.html", "config.js", "posix_tz_db.js", "boot_mode.webm", "reset_only.webm"]
 
 
 def read_boards(project_dir: Path) -> tuple[dict, str]:
